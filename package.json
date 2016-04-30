@@ -10,5 +10,8 @@
   "license": "ISC",
   "devDependencies": {
     "webpack": "^1.12.14"
+  },
+  "dependencies": {
+    "geneticalgorithm": "^0.3.2"
   }
 }

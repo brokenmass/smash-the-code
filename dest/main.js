@@ -44,260 +44,210 @@
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Bot = __webpack_require__(1);
+	'use strict';
 
-	/**
-	 * Auto-generated code below aims at helping you parse
-	 * the standard input according to the problem statement.
-	 **/
-
-	var laps = parseInt(readline());
-	var checkpointCount = parseInt(readline());
-	var checkpoints = [];
-	for (var i = 0; i < checkpointCount; i++) {
-	    var inputs = readline().split(' ');
-	    var checkpointX = parseInt(inputs[0]);
-	    var checkpointY = parseInt(inputs[1]);
-	    checkpoints.push({x:checkpointX, y:checkpointY});
-
-	}
-	for (var i = 0; i < checkpointCount; i++) {
-	    var cur = checkpoints[i];
-	    var next = checkpoints[i+i];
-	    if(!next) {
-	        next = checkpoints[0];
-	    }
-	    cur.angleToNext = Math.atan2(-(next.y - cur.y), next.x - cur.x);
-	}
-
-
-
-
-
-	var myBots = [new Bot(0, 'POD_01', checkpoints), new Bot(1, 'POD_02', checkpoints)];
-	printErr(JSON.stringify(checkpoints));
+	var GameMap = __webpack_require__(2);
 
 	// game loop
 	while (true) {
-	    for (var i = 0; i < 2; i++) {
+	  var i, x, y;
+	  var maps = new Array(2);
+	  var blocks = new Array(8);
+	  for (i = 0; i < 8; i++) {
+	    blocks[i] = readline().split(' ');
+	  }
 
-	        var inputs = readline().split(' ');
-	        myBots[i].parse(inputs);
-	    }
-	    for (var i = 0; i < 2; i++) {
-	        var inputs = readline().split(' ');
-	        var x = parseInt(inputs[0]);
-	        var y = parseInt(inputs[1]);
-	        var vx = parseInt(inputs[2]);
-	        var vy = parseInt(inputs[3]);
-	        var angle = parseInt(inputs[4]);
-	        var nextCheckPointId = parseInt(inputs[5]);
-	    }
-
-	    myBots[0].printCommand();
-	    myBots[1].printCommand();
-	}
-
-	function speedBound(speed, minSpeed) {
-	    return Math.floor(Math.max(minSpeed,Math.min(200,speed)));
-	}
-
-	function normalizeAngle(angle) {
-
-	    while(angle>Math.PI) { angle-=2*Math.PI;}
-	    while(angle<-Math.PI) { angle+=2*Math.PI;}
-	    return angle;
-	}
-
-/***/ },
-/* 1 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var utils = __webpack_require__(2);
-
-	function Bot(index, name, checkpoints) {
-	    this.index = index;
-	    this.name = name;
-	    this.checkpoints = checkpoints;
-	    this.checkpointsCount = 0;
-	}
-
-	Bot.prototype.parse = function(inputs) {
-	    this.command = null;
-	    this.pos = {
-	        x: parseInt(inputs[0]),
-	        y: parseInt(inputs[1]),
-	        angle: utils.normalizeAngle(parseInt(-inputs[4]) * utils.DEG2RAD)
-	    };
-	    this.speed = {
-	        x: parseInt(inputs[2]),
-	        y: parseInt(inputs[3]),
-	        angle: Math.atan2(-inputs[3], inputs[2])
-	    };
-	    this.speed.abs = utils.calc2dDist(this.speed.x, this.speed.y);
-	    if(this.checkPointId && this.checkPointId !==parseInt(inputs[5])) {
-	        this.checkpointsCount++;
-	    }
-	    this.checkPointId = parseInt(inputs[5]);
-	    this.setTarget(this.checkPointId);
-	};
-
-	Bot.prototype.setTarget = function(targetId) {
-	    var checkpoint = this.checkpoints[targetId];
-	    this.target = {
-	        id: targetId,
-	        x: checkpoint.x,
-	        y: checkpoint.y
-	    };
-
-	    this.target.distance = utils.calc2dDist(this.target.x - this.pos.x, this.target.y - this.pos.y);
-
-	    var correction = this.target.distance/4;
-	    var dx = -Math.floor(correction*Math.cos(checkpoint.angleToNext));
-	    var dy =  Math.floor(correction*Math.sin(checkpoint.angleToNext));
-
-	    this.target.angle = Math.atan2(-(this.target.y - this.pos.y), this.target.x - this.pos.x);
-	    this.target.optimalAngle = Math.atan2(-(this.target.y + dy - this.pos.y), this.target.x + dx - this.pos.x);
-
-	    printErr('optimization',correction,dx,dy,checkpoint.angleToNext * utils.RAD2DEG);
-	    this.calcDeltas();
-	};
-
-	Bot.prototype.nextTarget = function() {
-	    var nextTargetId = ++this.target.id % this.checkpoints.length;
-	    this.setTarget(nextTargetId);
-	};
-
-	Bot.prototype.calcDeltas = function() {
-	    this.deltaPosTarget = {
-	        x: this.target.x - this.pos.x,
-	        y: this.target.y - this.pos.y,
-	        angle: utils.normalizeAngle(this.target.angle - this.pos.angle),
-	        optimalAngle: utils.normalizeAngle(this.target.optimalAngle - this.pos.angle)
-	    };
-
-
-	    this.deltaSpeedTarget = {
-	        angle: utils.normalizeAngle(this.target.angle - this.speed.angle),
-	        optimalAngle: utils.normalizeAngle(this.target.optimalAngle - this.speed.angle)
-	    };
-	};
-
-	Bot.prototype.calcETA = function() {
-	    var eta = (this.target.distance-400) / (this.speed.abs * Math.cos(this.deltaSpeedTarget.angle));
-	    if(eta <0) {
-	        eta = Infinity;
-	    }
-	    printErr('ETA' , eta);
-	    return eta;
-	};
-
-	Bot.prototype.calcThrust = function() {
-
-	    var speed = 0;
-	    var eta = this.calcETA();
-
-	    if(eta < (1 + Math.sqrt(this.speed.abs * Math.cos(this.deltaSpeedTarget.angle))/10)) {
-	        //approach mode
-	        var maxspeed = 200;
-	        var angleRatio = utils.normalizeAngle(this.target.optimalAngle - this.deltaSpeedTarget.angle)*10/Math.PI; //0-10
-	        this.nextTarget();
-	        this.calcCommand();
-
-	        speed = (maxspeed/ 1+(angleRatio)) * (1.05-Math.abs(this.deltaSpeedTarget.angle)/Math.PI);
-	        printErr('approach mode', angleRatio, speed);
+	  for (i = 0; i < 2; i++) {
+	    var map = [[], [], [], [], [], []];
+	    for (y = 11; y >= 0; y--) {
+	      var cols = readline().split('');
+	      for (x = 0; x < 6; x++) {
+	        if (cols[x] !== '.') {
+	          map[x].unshift({
+	            color: +cols[x]
+	          });
 	        }
-	    else {
-	        this.calcCommand();
-	        speed = 200 * (1.05-Math.abs(this.deltaSpeedTarget.optimalAngle)/Math.PI);
-	        printErr('navigation mode', speed);
+	      }
 	    }
 
-	    if(Math.abs(utils.normalizeAngle(this.command.angle - this.pos.angle)) > Math.PI/2) {
-	        speed = (10 - Math.abs(this.deltaPosTarget.angle)*10/Math.PI);
-	        speed=0;
-	        printErr('brake mode', speed);
-	    }
+	    maps[i] = new GameMap(map);
+	  }
 
-	    this.command.thrust = utils.speedBound(speed, 20);
-	};
+	  var expectedScore = maps[0].add(blocks[0], blocks[0][0]);
+	  printErr(JSON.stringify(expectedScore));
 
-	Bot.prototype.calcCommand = function() {
+	  // Write an action using print()
+	  // To debug: printErr('Debug messages...');
 
-	    var angle = this.target.optimalAngle;
+	  print(blocks[0][0]); // "x": the column in which to drop your blocks
+	}
 
-	    if( this.deltaSpeedTarget.angle !== 0 &&
-	        Math.abs(this.deltaSpeedTarget.angle) < Math.PI/2) {
-	        // compensate vector
-	        angle += this.deltaSpeedTarget.optimalAngle;
-	    }
-
-
-	    var dx =  Math.floor(4000*Math.cos(angle));
-	    var dy = -Math.floor(4000*Math.sin(angle));
-	    this.command = {
-	        x: this.pos.x + dx,
-	        y: this.pos.y + dy,
-	        dx: dx,
-	        dy: dy,
-	        angle: angle
-	    };
-	};
-
-	Bot.prototype.printCommand = function() {
-	    if(!this.command) {
-	        this.calcThrust();
-
-	    }
-	    this.debug();
-	    print(this.command.x+' '+ this.command.y +' '+ this.command.thrust);
-	};
-
-	Bot.prototype.debug = function() {
-	    printErr('---------------------');
-	    printErr(this.name, this.checkpointsCount);
-	    printErr('Pos    ', JSON.stringify(this.pos));
-	    printErr('Speed  ', JSON.stringify(this.speed));
-	    printErr('Target ', JSON.stringify(this.target));
-	    printErr('DeltaPosTarget  ', JSON.stringify(this.deltaPosTarget));
-	    printErr('DeltaSpeedTarget', JSON.stringify(this.deltaSpeedTarget));
-	    printErr('Command', JSON.stringify(this.command));
-	    printErr('---------------------');
-	};
-
-
-
-
-
-	module.exports = Bot;
 
 /***/ },
+/* 1 */,
 /* 2 */
 /***/ function(module, exports) {
 
-	var DEG2RAD = Math.PI / 180;
+	'use strict';
+	var colors = ['skull', 'blue', 'green', 'purple', 'red', 'yellow'];
 
-	function speedBound(speed, minSpeed) {
-	    return Math.floor(Math.max(minSpeed,Math.min(200,speed)));
+	function GameMap(initialStatus) {
+	  this._map = initialStatus;
 	}
 
-	function normalizeAngle(angle) {
-
-	    while(angle>Math.PI) { angle-=2*Math.PI;}
-	    while(angle<-Math.PI) { angle+=2*Math.PI;}
-	    return angle;
-	}
-	function calc2dDist(dx,dy) {
-	    return Math.sqrt(Math.pow(dx,2) + Math.pow(dy,2));
-	}
-
-	module.exports = {
-		DEG2RAD: DEG2RAD,
-		RAD2DEG: 1/DEG2RAD,
-		speedBound: speedBound,
-		normalizeAngle: normalizeAngle,
-		calc2dDist: calc2dDist
+	GameMap.prototype.clone = function clone() {
+	  return new GameMap(JSON.parse(JSON.stringify(this._map)));
 	};
+
+	GameMap.prototype.add = function add(block, column) {
+	  if (this._map[column].length > 10) {
+	    return false;
+	  }
+
+	  this._map[column].push({
+	    color: +block[0]
+	  });
+	  this._map[column].push({
+	    color: +block[1]
+	  });
+
+	  return this.evaluate();
+	};
+
+	GameMap.prototype.evaluate = function evaluate(score) {
+	  var x, y, i, cell;
+	  var labels = [];
+	  score = score || {
+	    points: 0,
+	    chains: -1
+	  };
+	  printErr('----------------------------');
+
+	  for (x = 0; x < 6; x++) {
+	    for (y = 0; y < this._map[x].length; y++) {
+	      cell = this._map[x][y];
+	      cell.id = x + '-' + y;
+	      cell.colorName = colors[cell.color];
+	    }
+	  }
+
+	  this._labelsMap = [[], [], [], [], [], []];
+
+	  for (x = 0; x < 6; x++) {
+	    for (y = 0; y < this._map[x].length; y++) {
+	      cell = this._map[x][y];
+	      //printErr('checking:' + cell.id + ' - labelled: ' + this._labelsMap[x][y]);
+	      if (cell.color !== 0 && !this._labelsMap[x][y]) {
+	        var newLabel = {
+	          color: cell.color,
+	          colorName: cell.colorName,
+	          cellCount: 0,
+	          cellToRemove: {}
+	        };
+	        labels.push(newLabel);
+	        this.dfs(x, y, newLabel);
+	      }
+	    }
+	  }
+
+	  var roundPoints = 0;
+	  var groupBonus = 0;
+	  var destroyedColors = {};
+	  for (i = 0; i < labels.length; i++) {
+	    var label = labels[i];
+	    printErr(x + ') ' + label.colorName + ' : ' + label.cellCount);
+	    if (label.cellCount >= 4) {
+	      // happy time !
+	      roundPoints += (10 * label.cellCount);
+	      if (label.cellCount >= 11) {
+	        groupBonus += 8;
+	      } else {
+	        groupBonus += label.cellCount - 4;
+	      }
+
+	      destroyedColors[label.color] = true;
+	      for (x = 0; x < 6; x++) {
+	        this._map[x] = this._map[x].filter(function (cell) {
+	          return !label.cellToRemove[cell.id];
+	        });
+	      }
+	    }
+	  }
+
+	  var colorBonus = Object.keys(destroyedColors).length - 1;
+
+	  if (roundPoints) {
+	    score.chains++;
+	    var bonus = groupBonus;
+	    if (colorBonus) {
+	      printErr('colorBonus ' + colorBonus);
+	      bonus += Math.pow(2, colorBonus);
+	    }
+
+	    if (score.chains) {
+	      printErr('chainBonus ' + score.chains);
+	      bonus += (Math.pow(2, score.chains - 1) * 8);
+	    }
+
+	    bonus = Math.max(1, Math.min(999, bonus));
+	    printErr(' -- roundPoints ' + roundPoints);
+	    printErr(' -- bonus ' + bonus);
+	    score.points += roundPoints * bonus;
+	    return this.evaluate(score);
+	  } else {
+	    return score;
+	  }
+	};
+
+	var dx = [+1, 0, -1, 0];
+	var dy = [0, +1, 0, -1];
+	GameMap.prototype.dfs = function dfs(x, y, currentLabel) {
+	  if ((x < 0 || x >= 6) || // out of bounds
+	      (y < 0 || y >= 12) || // out of bounds
+	      (!this._map[x][y]) || // invalid cell
+	      (this._labelsMap[x][y]) // already labeled
+	    ) {
+	    return;
+	  }
+
+	  if (this._map[x][y].color === 0) {
+	    // mark the cell only as one to remove
+	    currentLabel.cellToRemove[this._map[x][y].id] = true;
+	  }
+
+	  if (this._map[x][y].color === currentLabel.color) {
+	    //printErr(' ---- DFS ' + this._map[x][y].id + ' - ' + JSON.stringify(currentLabel));
+
+	    // mark the current cell
+	    currentLabel.cellToRemove[this._map[x][y].id] = true;
+	    this._labelsMap[x][y] = true;
+
+	    // increment cell counter
+	    currentLabel.cellCount++;
+
+	    // recursively mark the neighbors
+	    for (var direction = 0; direction < 4; ++direction) {
+	      this.dfs(x + dx[direction], y + dy[direction], currentLabel);
+	    }
+	  }
+	};
+
+	GameMap.prototype.debugMap = function debugMap() {
+	  printErr('------');
+	  for (var y = 11; y >= 0; y--) {
+	    var row = '';
+	    for (var x = 0; x < 6; x++) {
+	      row += this._map[x][y] ? this._map[x][y].colorName[0] : '.';
+	    }
+
+	    printErr(row);
+	  }
+
+	  printErr('------');
+	};
+
+	module.exports = GameMap;
+
 
 /***/ }
 /******/ ]);
