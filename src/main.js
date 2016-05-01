@@ -1,6 +1,9 @@
 'use strict';
 
 var GameMap = require('./GameMap');
+var Evolution = require('./Evolution');
+
+var colors = require('./colors');
 
 // game loop
 while (true) {
@@ -9,6 +12,8 @@ while (true) {
   var blocks = new Array(8);
   for (i = 0; i < 8; i++) {
     blocks[i] = readline().split(' ');
+    blocks[i][0] = +blocks[i][0];
+    blocks[i][1] = +blocks[i][1];
   }
 
   for (i = 0; i < 2; i++) {
@@ -17,8 +22,10 @@ while (true) {
       var cols = readline().split('');
       for (x = 0; x < 6; x++) {
         if (cols[x] !== '.') {
+          var color = +cols[x];
           map[x].unshift({
-            color: +cols[x]
+            color: color,
+            colorName: colors[color]
           });
         }
       }
@@ -27,11 +34,9 @@ while (true) {
     maps[i] = new GameMap(map);
   }
 
-  var expectedScore = maps[0].add(blocks[0], blocks[0][0]);
-  printErr(JSON.stringify(expectedScore));
+  var evo = new Evolution(maps[0], blocks);
+  var best = evo.best();
+  printErr(JSON.stringify(best));
 
-  // Write an action using print()
-  // To debug: printErr('Debug messages...');
-
-  print(blocks[0][0]); // "x": the column in which to drop your blocks
+  print(best.phenotype[0].join(' '), 'meh');
 }
