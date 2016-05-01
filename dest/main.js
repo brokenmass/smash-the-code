@@ -94,7 +94,9 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
+
 	var colors = __webpack_require__(5);
+	var utils = __webpack_require__(6);
 
 	var MAX_HEIGHT = 10;
 
@@ -113,7 +115,7 @@
 	};
 
 	GameMap.prototype.clone = function clone() {
-	  return new GameMap(JSON.parse(JSON.stringify(this._map)));
+	  return new GameMap(utils.cloneJSON(this._map));
 	};
 
 	var rotations = [1, 0, -1, 0];
@@ -574,6 +576,21 @@
 	'use strict';
 
 	module.exports = ['Skull', 'Blue', 'Green', 'Purple', 'Red', 'Yellow'];
+
+
+/***/ },
+/* 6 */
+/***/ function(module, exports) {
+
+	'use strict';
+
+	function cloneJSON(object) {
+	  return JSON.parse(JSON.stringify(object));
+	}
+
+	module.exports = {
+	  cloneJSON: cloneJSON
+	};
 
 
 /***/ }

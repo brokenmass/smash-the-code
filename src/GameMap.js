@@ -1,5 +1,7 @@
 'use strict';
+
 var colors = require('./colors');
+var utils = require('./utils');
 
 var MAX_HEIGHT = 10;
 
@@ -18,7 +20,7 @@ GameMap.prototype.debug = function debug(message) {
 };
 
 GameMap.prototype.clone = function clone() {
-  return new GameMap(JSON.parse(JSON.stringify(this._map)));
+  return new GameMap(utils.cloneJSON(this._map));
 };
 
 var rotations = [1, 0, -1, 0];
