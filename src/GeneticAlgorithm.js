@@ -17,24 +17,29 @@ var DEFAULTS = {
     return index;
   },
 
-  // At every generation the <elitarism> best individuals are guaranteed to
+  // At every generation, <elitarism> best individuals are guaranteed to
   // be propagated to the next generation untouched
   elitarism: 1,
 
-  // At every generation (1 - <crossoverRate>) * <mutationRate> individuals
-  // will mutate using <mutationFunction> and the mutation will be added
-  // to the next generation
-  mutationRate: 0.1,
-  mutationFunction: function (phenotype) {
-    return phenotype;
-  },
+  // At every generation, <immigration> new individuals are generated and
+  // added to the next generation
+  immigration: 2,
 
-  // At every generation <crossoverRate> individuals will breed and generate
+  // At every generation ~<crossoverRate> individuals will breed and generate
   // new individual using the <crossoverFunction> to mix their phenotypes
   // and the new indivuals will be added to the next generation.
   crossoverRate: 0.6,
   crossoverFunction: function (phenotypeA, phenotypeB) {
     return [phenotypeA, phenotypeB];
+  },
+
+  // At every generation, ~<(1 - <crossoverRate>) * populationSize> individuals
+  // moves to the next generation
+  // Of these <(<mutationRate> * 100)>% mutates using <mutationFunction>
+  // and the mutation result will be added to the next generation
+  mutationRate: 0.1,
+  mutationFunction: function (phenotype) {
+    return phenotype;
   },
 
   // Calculate the fitness score of a phenotype
@@ -61,7 +66,7 @@ var DEFAULTS = {
   },
 
   select1: selectors.select1.tournament3,
-  select2: selectors.select2.randomLinearRank
+  select2: selectors.select2.tournament3
 };
 
 function GeneticAlgorithm(options) {
@@ -72,7 +77,8 @@ function GeneticAlgorithm(options) {
     this['_' + key] = options[key] || DEFAULTS[key];
   }
 
-  for (i = this._phenotypes.length; i < this._populationSize; ++i)  {
+  var len = this._phenotypes.length;
+  for (i = this._populationSize - 1; i >= len; i--)  {
     this._phenotypes[i] = this._seedFunction(i, 0);
   }
 }
@@ -114,7 +120,7 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
         this._phenotypes[i] = this._seedFunction(i, reseedCount);
       }
 
-      printErr('GA STATS', 'ALL DEAD');
+      printErr('GA STATS', generation, 'ALL DEAD');
       continue;
     }
 
@@ -128,7 +134,10 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
       deaths: deaths
     };
 
-    printErr('GA STATS', JSON.stringify(stats));
+    if (generation % 10 === 0) {
+      printErr('GA STATS', generation, JSON.stringify(stats));
+    }
+
     if (this._terminationFunction(generation, population, stats)) {
       printErr('TERMINATING !!!');
       break;
@@ -138,6 +147,11 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
     var nextPhenotypes = new Array(this._populationSize);
     while (i < this._elitarism) {
       nextPhenotypes[i] = population[i].phenotype;
+      i++;
+    }
+
+    while (i < this._immigration) {
+      nextPhenotypes[i] = this._seedFunction(i, 0);
       i++;
     }
 
@@ -154,7 +168,7 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
       } else {
         var phenotype = this._select1(this, population);
         if (Math.random() < this._mutationRate) {
-          phenotype = this._mutationFunction(utils.cloneJSON(phenotype));
+          phenotype = this._mutationFunction(phenotype);
         }
 
         nextPhenotypes[i] = phenotype;

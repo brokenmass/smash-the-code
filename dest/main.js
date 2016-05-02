@@ -69,10 +69,7 @@
 	      for (x = 0; x < 6; x++) {
 	        if (cols[x] !== '.') {
 	          var color = +cols[x];
-	          map[x].unshift({
-	            color: color,
-	            colorName: colors[color]
-	          });
+	          map[x].unshift(color);
 	        }
 	      }
 	    }
@@ -82,9 +79,15 @@
 
 	  var evolution = new Evolution(maps[0], blocks);
 	  var result = evolution.evolve();
-	  printErr(JSON.stringify(result));
 
-	  print(result.best.phenotype[0].join(' '), 'meh');
+	  printErr(JSON.stringify(result.lastGenerationStats));
+	  printErr(JSON.stringify(result.runStats));
+	  printErr('roundCache', GameMap.roundCache._hits);
+	  printErr('turnCache', GameMap.turnCache._hits);
+	  printErr(JSON.stringify(result.best));
+
+	  var bestAction = result.best.phenotype[0] + ' ' + result.best.phenotype[1];
+	  print(bestAction, Math.round(result.best.fitness));
 	}
 
 
@@ -95,15 +98,16 @@
 	'use strict';
 
 	var colors = __webpack_require__(2);
-	var utils = __webpack_require__(3);
 
-	var MAX_HEIGHT = 10;
+	var turnCache = { _hits: 0 };
+	var roundCache = { _hits: 0 };
 
-	var turnCache = {};
-	var roundCache = {};
+	function GameMap(initalMap) {
+	  this._map = new Array(6);
+	  for (var x = 0; x < 6; x++) {
+	    this._map[x] = [].concat(initalMap[x]);
+	  }
 
-	function GameMap(initialStatus) {
-	  this._map = initialStatus;
 	  this._debug = false;
 	}
 
@@ -114,15 +118,13 @@
 	};
 
 	GameMap.prototype.clone = function clone() {
-	  return new GameMap(utils.cloneJSON(this._map));
+	  return new GameMap(this._map);
 	};
 
 	var rotations = [1, 0, -1, 0];
-	GameMap.prototype.add = function add(block, action) {
-	  var column1 = action[0];
-	  var rotation = action[1];
+	GameMap.prototype.add = function add(block, column1, rotation) {
+
 	  var column2 = column1 + rotations[rotation];
-	  this.debug([action, column2]);
 	  if (column2 < 0 || column2 >= 6) {
 	    //printErr(action + ' - out of bound');
 	    return false;
@@ -141,14 +143,8 @@
 	    secondBlock = 0;
 	  }
 
-	  this._map[column1].push({
-	    color: block[firstBlock],
-	    colorName: colors[block[firstBlock]]
-	  });
-	  this._map[column2].push({
-	    color: block[secondBlock],
-	    colorName: colors[block[secondBlock]]
-	  });
+	  this._map[column1].push(block[firstBlock]);
+	  this._map[column2].push(block[secondBlock]);
 
 	  return this.calcTurnScore();
 	};
@@ -156,6 +152,7 @@
 	GameMap.prototype.calcTurnScore = function calcTurnScore() {
 	  var id = JSON.stringify(this._map);
 	  if (turnCache[id]) {
+	    turnCache._hits++;
 	    this._map = JSON.parse(turnCache[id].map);
 	    return turnCache[id].turnScore;
 	  }
@@ -201,29 +198,24 @@
 	  var id = JSON.stringify(this._map);
 	  var x, y, i, cell;
 	  if (roundCache[id]) {
+	    roundCache._hits++;
 	    this._map = JSON.parse(roundCache[id].map);
 	    return roundCache[id].roundScore;
 	  }
 
 	  this._labels = [];
 	  this._labelsMap = [[], [], [], [], [], []];
-	  for (x = 0; x < 6; x++) {
-	    for (y = 0; y < this._map[x].length; y++) {
-	      this._map[x][y].id = x + '-' + y;
-	    }
-	  }
 
 	  for (x = 0; x < 6; x++) {
 	    for (y = 0; y < this._map[x].length; y++) {
 	      cell = this._map[x][y];
 
-	      if (cell.color !== 0 && !this._labelsMap[x][y]) {
+	      if (cell !== 0 && !this._labelsMap[x][y]) {
 	        var newLabel = {
-	          color: cell.color,
-	          colorName: cell.colorName,
+	          color: cell,
 	          cellsCount: 0,
 	          skullsCount: 0,
-	          cellToRemove: {}
+	          cellsToRemove: []
 	        };
 	        this._labels.push(newLabel);
 	        this.dfs(x, y, newLabel);
@@ -249,16 +241,24 @@
 	      }
 
 	      destroyedColors[label.color] = true;
-	      for (x = 0; x < 6; x++) {
-	        this._map[x] = this._map[x].filter(function (cell) {
-	          return !label.cellToRemove[cell.id];
-	        });
+	      for (x = 0; x < label.cellsToRemove.length; x++) {
+	        cell = label.cellsToRemove[x];
+	        this._map[cell[0]][cell[1]] = null;
 	      }
 	    } else {
-	      labelPoints += label.cellsCount * label.cellsCount;
+	      labelPoints += label.cellsCount * label.cellsCount * label.cellsCount;
 	    }
 	  }
 
+	  if (points) {
+	    for (x = 0; x < 6; x++) {
+	      this._map[x] = this._map[x].filter(function (cell) {
+	        return cell !== null;
+	      });
+	    }
+	  }
+
+	  //printErr(JSON.stringify(this._labels));
 	  var colorBonus = Object.keys(destroyedColors).length - 1;
 
 	  var roundScore = {
@@ -281,25 +281,32 @@
 	var dx = [+1, 0, -1, 0];
 	var dy = [0, +1, 0, -1];
 	GameMap.prototype.dfs = function dfs(x, y, currentLabel) {
-	  if ((x < 0 || x >= 6) || // out of bounds
-	      (y < 0 || y >= 12) || // out of bounds
-	      (!this._map[x][y]) || // invalid cell
+	  if (
+	      (x < 0 || x >= 6) || // out of bounds
+	      (y < 0 || y >= 12) // out of bounds
+	    ) {
+	    return;
+	  }
+
+	  var cell = this._map[x][y];
+	  if (
+	      (cell === undefined) || // invalid cell
 	      (this._labelsMap[x][y]) // already labeled
 	    ) {
 	    return;
 	  }
 
-	  if (this._map[x][y].color === 0) {
+	  if (cell === 0) {
 	    // mark the cell only as one to remove
-	    currentLabel.cellToRemove[this._map[x][y].id] = true;
+	    currentLabel.cellsToRemove.push([x, y]);
 
 	    // increment skull counter
 	    currentLabel.skullsCount++;
 	  }
 
-	  if (this._map[x][y].color === currentLabel.color) {
+	  if (cell === currentLabel.color) {
 	    // mark the current cell
-	    currentLabel.cellToRemove[this._map[x][y].id] = true;
+	    currentLabel.cellsToRemove.push([x, y]);
 	    this._labelsMap[x][y] = true;
 
 	    // increment cell counter
@@ -317,7 +324,7 @@
 	  for (var y = 11; y >= 0; y--) {
 	    var row = '';
 	    for (var x = 0; x < 6; x++) {
-	      row += this._map[x][y] ? this._map[x][y].colorName[0] : '.';
+	      row += this._map[x][y] ? colors[this._map[x][y]][0] : '.';
 	    }
 
 	    printErr(row);
@@ -326,6 +333,8 @@
 	  printErr('------');
 	};
 
+	GameMap.turnCache = turnCache;
+	GameMap.roundCache = roundCache;
 	module.exports = GameMap;
 
 
@@ -360,7 +369,6 @@
 	'use strict';
 
 	var GeneticAlgorithm = __webpack_require__(5);
-	var utils = __webpack_require__(3);
 
 	var phenotypesStore = [];
 
@@ -369,9 +377,9 @@
 	  this._map = map;
 	  this._blocks = blocks;
 
-	  this._steps = 8;
-	  this._generations = 20;
-	  this._populationSize = 30;
+	  this._steps = 6;
+	  this._generations = 1000;
+	  this._populationSize = 40;
 
 	  this._algorithm = new GeneticAlgorithm({
 	    phenotypes: phenotypesStore,
@@ -393,9 +401,9 @@
 	};
 
 	Evolution.prototype.seedFunction = function seedFunction(index, reseedCount) {
-	  var length = Math.max(1, this._steps - reseedCount);
+	  var length = Math.max(1, this._steps - reseedCount) * 2;
 	  var phenotype = new Array(length);
-	  for (var i = 0; i < length; i++) {
+	  for (var i = 0; i < length; i += 2) {
 	    var rotation = Math.floor(Math.random() * 4);
 	    var minColumn = 0;
 	    var colcount = 6;
@@ -408,7 +416,8 @@
 	    }
 
 	    var column = minColumn + Math.floor(Math.random() * colcount);
-	    phenotype[i] = [column, rotation];
+	    phenotype[i] = column;
+	    phenotype[i + 1] = rotation;
 	  }
 
 	  return phenotype;
@@ -418,14 +427,15 @@
 	  var map = this._map.clone();
 	  var results = [];
 	  var fitness = 0;
-	  for (var x = 0; x < phenotype.length; x++) {
-	    var result = map.add(this._blocks[x], phenotype[x]);
-
+	  var blockIndex = 0;
+	  var len = phenotype.length;
+	  for (var x = 0; x < len; x += 2, blockIndex++) {
+	    var result = map.add(this._blocks[blockIndex], phenotype[x], phenotype[x + 1]);
 	    if (!result) {
 	      return -100;
 	    } else {
 	      results.push(result);
-	      fitness += (result.points + result.labelPoints + result.destroyedSkulls) / (1 + x/2);
+	      fitness += (result.points + result.labelPoints + result.destroyedSkulls) / (1 + blockIndex / 2);
 	    }
 	  }
 
@@ -435,29 +445,37 @@
 
 	Evolution.prototype.crossoverFunction = function crossoverFunction(phenotypeA, phenotypeB) {
 	  var length = Math.max(phenotypeA.length, phenotypeB.length);
-	  var result1 = new Array(length);
-	  var result2 = new Array(length);
-	  for (var x = 0; x < length; x++) {
+	  var child1 = new Array(length);
+	  var child2 = new Array(length);
+	  var mother, father;
+
+	  for (var x = 0; x < length; x += 2) {
 	    if (!phenotypeA[x]) {
-	      result1[x] = [phenotypeB[x][0], phenotypeB[x][1]];
-	      result2[x] = [phenotypeB[x][0], phenotypeB[x][1]];
+	      mother = phenotypeB;
+	      father = phenotypeB;
 	    } else if (!phenotypeB[x]) {
-	      result1[x] = [phenotypeA[x][0], phenotypeA[x][1]];
-	      result2[x] = [phenotypeA[x][0], phenotypeA[x][1]];
+	      mother = phenotypeA;
+	      father = phenotypeA;
 	    } else if (Math.random() >= 0.5) {
-	      result1[x] = [phenotypeA[x][0], phenotypeA[x][1]];
-	      result2[x] = [phenotypeB[x][0], phenotypeB[x][1]];
+	      mother = phenotypeA;
+	      father = phenotypeB;
 	    } else {
-	      result1[x] = [phenotypeB[x][0], phenotypeB[x][1]];
-	      result2[x] = [phenotypeA[x][0], phenotypeA[x][1]];
+	      mother = phenotypeB;
+	      father = phenotypeA;
 	    }
+
+	    child1[x] = mother[x];
+	    child1[x + 1] = mother[x + 1];
+	    child2[x] = father[x];
+	    child2[x + 1] = father[x + 1];
 	  }
 
-	  return [result1, result2];
+	  return [child1, child2];
 	};
 
 	Evolution.prototype.mutationFunction = function mutationFunction(phenotype) {
-	  var step = Math.floor(Math.random() * phenotype.length); // randomly select a step to mutate
+	  var mutation = [].concat(phenotype);
+	  var step = Math.floor(Math.random() * mutation.length / 2) * 2; // randomly select a step to mutate
 
 	  var rotation = Math.floor(Math.random() * 4);
 	  var minColumn = 0;
@@ -471,8 +489,9 @@
 	  }
 
 	  var column = minColumn + Math.floor(Math.random() * colcount);
-	  phenotype[step] = [column, rotation];
-	  return phenotype;
+	  mutation[step] = column;
+	  mutation[step + 1] = rotation;
+	  return mutation;
 	};
 
 	Evolution.prototype.surviveFunction = function surviveFunction(entity) {
@@ -484,7 +503,7 @@
 	  var runTime = now - this._prevRun;
 	  this._prevRun = now;
 	  this._runTimes.push(runTime);
-	  return (85 - (now - this._startTime)) < runTime;
+	  return (90 - (now - this._startTime)) < runTime;
 	};
 
 	Evolution.prototype.evolve = function evolve() {
@@ -496,9 +515,10 @@
 	  var result = this._algorithm.evolve();
 
 	  phenotypesStore = [];
-	  for (var i = 0; i < result.population.length; i++) {
-	    var phenotype = utils.cloneJSON(result.population[i].phenotype);
-	    phenotype.shift(); // remove first , obsolete, action
+	  for (var i = 0; i < result.population.length / 2; i++) {
+	    var phenotype = [].concat(result.population[i].phenotype);
+	    phenotype.shift();
+	    phenotype.shift(); // remove first, obsolete, action
 	    var rotation = Math.floor(Math.random() * 4);
 	    var minColumn = 0;
 	    var colcount = 6;
@@ -511,7 +531,8 @@
 	    }
 
 	    var column = minColumn + Math.floor(Math.random() * colcount);
-	    phenotype.push([column, rotation]);
+	    phenotype.push(column);
+	    phenotype.push(rotation);
 	    phenotypesStore.push(phenotype);
 	  }
 
@@ -519,6 +540,7 @@
 	    best: result.population[0],
 	    lastGenerationStats: result.stats,
 	    runStats: {
+	      generations: result.generation + 1,
 	      testedPhenotypes: this._testedPhenotypes,
 	      runTimes: this._runTimes,
 	      totalRunTime: Date.now() - this._startTime
@@ -552,24 +574,29 @@
 	    return index;
 	  },
 
-	  // At every generation the <elitarism> best individuals are guaranteed to
+	  // At every generation, <elitarism> best individuals are guaranteed to
 	  // be propagated to the next generation untouched
 	  elitarism: 1,
 
-	  // At every generation (1 - <crossoverRate>) * <mutationRate> individuals
-	  // will mutate using <mutationFunction> and the mutation will be added
-	  // to the next generation
-	  mutationRate: 0.1,
-	  mutationFunction: function (phenotype) {
-	    return phenotype;
-	  },
+	  // At every generation, <immigration> new individuals are generated and
+	  // added to the next generation
+	  immigration: 2,
 
-	  // At every generation <crossoverRate> individuals will breed and generate
+	  // At every generation ~<crossoverRate> individuals will breed and generate
 	  // new individual using the <crossoverFunction> to mix their phenotypes
 	  // and the new indivuals will be added to the next generation.
 	  crossoverRate: 0.6,
 	  crossoverFunction: function (phenotypeA, phenotypeB) {
 	    return [phenotypeA, phenotypeB];
+	  },
+
+	  // At every generation, ~<(1 - <crossoverRate>) * populationSize> individuals
+	  // moves to the next generation
+	  // Of these <(<mutationRate> * 100)>% mutates using <mutationFunction>
+	  // and the mutation result will be added to the next generation
+	  mutationRate: 0.1,
+	  mutationFunction: function (phenotype) {
+	    return phenotype;
 	  },
 
 	  // Calculate the fitness score of a phenotype
@@ -596,7 +623,7 @@
 	  },
 
 	  select1: selectors.select1.tournament3,
-	  select2: selectors.select2.randomLinearRank
+	  select2: selectors.select2.tournament3
 	};
 
 	function GeneticAlgorithm(options) {
@@ -607,7 +634,8 @@
 	    this['_' + key] = options[key] || DEFAULTS[key];
 	  }
 
-	  for (i = this._phenotypes.length; i < this._populationSize; ++i)  {
+	  var len = this._phenotypes.length;
+	  for (i = this._populationSize - 1; i >= len; i--)  {
 	    this._phenotypes[i] = this._seedFunction(i, 0);
 	  }
 	}
@@ -649,7 +677,7 @@
 	        this._phenotypes[i] = this._seedFunction(i, reseedCount);
 	      }
 
-	      printErr('GA STATS', 'ALL DEAD');
+	      printErr('GA STATS', generation, 'ALL DEAD');
 	      continue;
 	    }
 
@@ -663,7 +691,10 @@
 	      deaths: deaths
 	    };
 
-	    printErr('GA STATS', JSON.stringify(stats));
+	    if (generation % 10 === 0) {
+	      printErr('GA STATS', generation, JSON.stringify(stats));
+	    }
+
 	    if (this._terminationFunction(generation, population, stats)) {
 	      printErr('TERMINATING !!!');
 	      break;
@@ -673,6 +704,11 @@
 	    var nextPhenotypes = new Array(this._populationSize);
 	    while (i < this._elitarism) {
 	      nextPhenotypes[i] = population[i].phenotype;
+	      i++;
+	    }
+
+	    while (i < this._immigration) {
+	      nextPhenotypes[i] = this._seedFunction(i, 0);
 	      i++;
 	    }
 
@@ -689,7 +725,7 @@
 	      } else {
 	        var phenotype = this._select1(this, population);
 	        if (Math.random() < this._mutationRate) {
-	          phenotype = this._mutationFunction(utils.cloneJSON(phenotype));
+	          phenotype = this._mutationFunction(phenotype);
 	        }
 
 	        nextPhenotypes[i] = phenotype;

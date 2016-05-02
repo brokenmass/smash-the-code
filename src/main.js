@@ -23,10 +23,7 @@ while (true) {
       for (x = 0; x < 6; x++) {
         if (cols[x] !== '.') {
           var color = +cols[x];
-          map[x].unshift({
-            color: color,
-            colorName: colors[color]
-          });
+          map[x].unshift(color);
         }
       }
     }
@@ -36,7 +33,13 @@ while (true) {
 
   var evolution = new Evolution(maps[0], blocks);
   var result = evolution.evolve();
-  printErr(JSON.stringify(result));
 
-  print(result.best.phenotype[0].join(' '), 'meh');
+  printErr(JSON.stringify(result.lastGenerationStats));
+  printErr(JSON.stringify(result.runStats));
+  printErr('roundCache', GameMap.roundCache._hits);
+  printErr('turnCache', GameMap.turnCache._hits);
+  printErr(JSON.stringify(result.best));
+
+  var bestAction = result.best.phenotype[0] + ' ' + result.best.phenotype[1];
+  print(bestAction, Math.round(result.best.fitness));
 }

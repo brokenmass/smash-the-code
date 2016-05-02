@@ -1,15 +1,16 @@
 'use strict';
 
 var colors = require('./colors');
-var utils = require('./utils');
 
-var MAX_HEIGHT = 10;
+var turnCache = { _hits: 0 };
+var roundCache = { _hits: 0 };
 
-var turnCache = {};
-var roundCache = {};
+function GameMap(initalMap) {
+  this._map = new Array(6);
+  for (var x = 0; x < 6; x++) {
+    this._map[x] = [].concat(initalMap[x]);
+  }
 
-function GameMap(initialStatus) {
-  this._map = initialStatus;
   this._debug = false;
 }
 
@@ -20,15 +21,13 @@ GameMap.prototype.debug = function debug(message) {
 };
 
 GameMap.prototype.clone = function clone() {
-  return new GameMap(utils.cloneJSON(this._map));
+  return new GameMap(this._map);
 };
 
 var rotations = [1, 0, -1, 0];
-GameMap.prototype.add = function add(block, action) {
-  var column1 = action[0];
-  var rotation = action[1];
+GameMap.prototype.add = function add(block, column1, rotation) {
+
   var column2 = column1 + rotations[rotation];
-  this.debug([action, column2]);
   if (column2 < 0 || column2 >= 6) {
     //printErr(action + ' - out of bound');
     return false;
@@ -47,14 +46,8 @@ GameMap.prototype.add = function add(block, action) {
     secondBlock = 0;
   }
 
-  this._map[column1].push({
-    color: block[firstBlock],
-    colorName: colors[block[firstBlock]]
-  });
-  this._map[column2].push({
-    color: block[secondBlock],
-    colorName: colors[block[secondBlock]]
-  });
+  this._map[column1].push(block[firstBlock]);
+  this._map[column2].push(block[secondBlock]);
 
   return this.calcTurnScore();
 };
@@ -62,6 +55,7 @@ GameMap.prototype.add = function add(block, action) {
 GameMap.prototype.calcTurnScore = function calcTurnScore() {
   var id = JSON.stringify(this._map);
   if (turnCache[id]) {
+    turnCache._hits++;
     this._map = JSON.parse(turnCache[id].map);
     return turnCache[id].turnScore;
   }
@@ -107,29 +101,24 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
   var id = JSON.stringify(this._map);
   var x, y, i, cell;
   if (roundCache[id]) {
+    roundCache._hits++;
     this._map = JSON.parse(roundCache[id].map);
     return roundCache[id].roundScore;
   }
 
   this._labels = [];
   this._labelsMap = [[], [], [], [], [], []];
-  for (x = 0; x < 6; x++) {
-    for (y = 0; y < this._map[x].length; y++) {
-      this._map[x][y].id = x + '-' + y;
-    }
-  }
 
   for (x = 0; x < 6; x++) {
     for (y = 0; y < this._map[x].length; y++) {
       cell = this._map[x][y];
 
-      if (cell.color !== 0 && !this._labelsMap[x][y]) {
+      if (cell !== 0 && !this._labelsMap[x][y]) {
         var newLabel = {
-          color: cell.color,
-          colorName: cell.colorName,
+          color: cell,
           cellsCount: 0,
           skullsCount: 0,
-          cellToRemove: {}
+          cellsToRemove: []
         };
         this._labels.push(newLabel);
         this.dfs(x, y, newLabel);
@@ -155,16 +144,24 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
       }
 
       destroyedColors[label.color] = true;
-      for (x = 0; x < 6; x++) {
-        this._map[x] = this._map[x].filter(function (cell) {
-          return !label.cellToRemove[cell.id];
-        });
+      for (x = 0; x < label.cellsToRemove.length; x++) {
+        cell = label.cellsToRemove[x];
+        this._map[cell[0]][cell[1]] = null;
       }
     } else {
-      labelPoints += label.cellsCount * label.cellsCount;
+      labelPoints += label.cellsCount * label.cellsCount * label.cellsCount;
     }
   }
 
+  if (points) {
+    for (x = 0; x < 6; x++) {
+      this._map[x] = this._map[x].filter(function (cell) {
+        return cell !== null;
+      });
+    }
+  }
+
+  //printErr(JSON.stringify(this._labels));
   var colorBonus = Object.keys(destroyedColors).length - 1;
 
   var roundScore = {
@@ -187,25 +184,32 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
 var dx = [+1, 0, -1, 0];
 var dy = [0, +1, 0, -1];
 GameMap.prototype.dfs = function dfs(x, y, currentLabel) {
-  if ((x < 0 || x >= 6) || // out of bounds
-      (y < 0 || y >= 12) || // out of bounds
-      (!this._map[x][y]) || // invalid cell
+  if (
+      (x < 0 || x >= 6) || // out of bounds
+      (y < 0 || y >= 12) // out of bounds
+    ) {
+    return;
+  }
+
+  var cell = this._map[x][y];
+  if (
+      (cell === undefined) || // invalid cell
       (this._labelsMap[x][y]) // already labeled
     ) {
     return;
   }
 
-  if (this._map[x][y].color === 0) {
+  if (cell === 0) {
     // mark the cell only as one to remove
-    currentLabel.cellToRemove[this._map[x][y].id] = true;
+    currentLabel.cellsToRemove.push([x, y]);
 
     // increment skull counter
     currentLabel.skullsCount++;
   }
 
-  if (this._map[x][y].color === currentLabel.color) {
+  if (cell === currentLabel.color) {
     // mark the current cell
-    currentLabel.cellToRemove[this._map[x][y].id] = true;
+    currentLabel.cellsToRemove.push([x, y]);
     this._labelsMap[x][y] = true;
 
     // increment cell counter
@@ -223,7 +227,7 @@ GameMap.prototype.debugMap = function debugMap() {
   for (var y = 11; y >= 0; y--) {
     var row = '';
     for (var x = 0; x < 6; x++) {
-      row += this._map[x][y] ? this._map[x][y].colorName[0] : '.';
+      row += this._map[x][y] ? colors[this._map[x][y]][0] : '.';
     }
 
     printErr(row);
@@ -232,4 +236,6 @@ GameMap.prototype.debugMap = function debugMap() {
   printErr('------');
 };
 
+GameMap.turnCache = turnCache;
+GameMap.roundCache = roundCache;
 module.exports = GameMap;
