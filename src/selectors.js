@@ -8,7 +8,7 @@ function tournamentX(size) {
       group[i] = population[Math.floor(Math.random() * n)];
     }
 
-    return group.sort(scope._comparisonFunction)[0].entity;
+    return group.sort(scope._comparisonFunction)[0].phenotype;
   };
 }
 
@@ -18,22 +18,22 @@ var select1 = {
   tournament3: tournamentX(3),
 
   fittest: function (scope, population) {
-    return population[0].entity;
+    return population[0].phenotype;
   },
 
   random: function (scope, population) {
-    return population[Math.floor(Math.random() * population.length)].entity;
+    return population[Math.floor(Math.random() * population.length)].phenotype;
   },
 
   randomLinearRank: function (scope, population) {
     this._internalState.rlr = this._internalState.rlr || 0;
     var index = Math.floor(Math.random() * Math.min(population.length, (this._internalState.rlr++)));
-    return population[index].entity;
+    return population[index].phenotype;
   },
 
   sequential: function (scope, population) {
     this._internalState.seq = this._internalState.seq || 0;
-    return population[(this._internalState.seq++) % population.length].entity;
+    return population[(this._internalState.seq++) % population.length].phenotype;
   }
 };
 
@@ -81,7 +81,7 @@ var select2 = {
   }
 };
 
-module.export = {
+module.exports = {
   tournamentX: tournamentX,
   select1: select1,
   select2: select2

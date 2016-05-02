@@ -34,9 +34,9 @@ while (true) {
     maps[i] = new GameMap(map);
   }
 
-  var evo = new Evolution(maps[0], blocks);
-  var best = evo.best();
-  printErr(JSON.stringify(best));
+  var evolution = new Evolution(maps[0], blocks);
+  var result = evolution.evolve();
+  printErr(JSON.stringify(result));
 
-  print(best.phenotype[0].join(' '), 'meh');
+  print(result.best.phenotype[0].join(' '), 'meh');
 }
