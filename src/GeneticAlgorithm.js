@@ -1,7 +1,6 @@
 'use strict';
 
 var selectors = require('./selectors');
-var utils = require('./utils');
 
 var DEFAULTS = {
   generations: 100,
@@ -25,7 +24,7 @@ var DEFAULTS = {
   // added to the next generation
   immigration: 2,
 
-  // At every generation ~<crossoverRate> individuals will breed and generate
+  // At every generation ~<( <crossoverRate> * <populationSize> )> individuals will breed and generate
   // new individual using the <crossoverFunction> to mix their phenotypes
   // and the new indivuals will be added to the next generation.
   crossoverRate: 0.6,
@@ -33,7 +32,7 @@ var DEFAULTS = {
     return [phenotypeA, phenotypeB];
   },
 
-  // At every generation, ~<(1 - <crossoverRate>) * populationSize> individuals
+  // At every generation, ~<( (1 - <crossoverRate>) * <populationSize> )> individuals
   // moves to the next generation
   // Of these <(<mutationRate> * 100)>% mutates using <mutationFunction>
   // and the mutation result will be added to the next generation
@@ -134,12 +133,7 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
       deaths: deaths
     };
 
-    if (generation % 10 === 0) {
-      printErr('GA STATS', generation, JSON.stringify(stats));
-    }
-
     if (this._terminationFunction(generation, population, stats)) {
-      printErr('TERMINATING !!!');
       break;
     }
 
@@ -150,7 +144,7 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
       i++;
     }
 
-    while (i < this._immigration) {
+    while (i < this._elitarism + this._immigration) {
       nextPhenotypes[i] = this._seedFunction(i, 0);
       i++;
     }

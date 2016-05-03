@@ -3,8 +3,6 @@
 var GameMap = require('./GameMap');
 var Evolution = require('./Evolution');
 
-var colors = require('./colors');
-
 // game loop
 while (true) {
   var i, x, y;
@@ -15,6 +13,8 @@ while (true) {
     blocks[i][0] = +blocks[i][0];
     blocks[i][1] = +blocks[i][1];
   }
+
+  GameMap.resetCache();
 
   for (i = 0; i < 2; i++) {
     var map = [[], [], [], [], [], []];

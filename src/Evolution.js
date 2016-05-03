@@ -13,7 +13,10 @@ function Evolution(map, blocks) {
   this._generations = 1000;
   this._populationSize = 40;
 
+  this._maxRuntime = 90;
+
   this._algorithm = new GeneticAlgorithm({
+    immigration: 5,
     phenotypes: phenotypesStore,
     generations: this._generations,
     populationSize: this._populationSize,
@@ -130,12 +133,23 @@ Evolution.prototype.surviveFunction = function surviveFunction(entity) {
   return entity.fitness >= 0;
 };
 
-Evolution.prototype.terminationFunction = function terminationFunction() {
+Evolution.prototype.terminationFunction = function terminationFunction(generation, population, stats) {
   var now = Date.now();
   var runTime = now - this._prevRun;
   this._prevRun = now;
   this._runTimes.push(runTime);
-  return (90 - (now - this._startTime)) < runTime;
+
+  var timeout = (this._maxRuntime - (now - this._startTime)) < runTime;
+
+  if (generation % 10 === 0 || timeout) {
+    printErr('GA STATS', generation, JSON.stringify(stats));
+  }
+
+  if (timeout) {
+    printErr('TERMINATING', generation, JSON.stringify(stats));
+  }
+
+  return timeout;
 };
 
 Evolution.prototype.evolve = function evolve() {

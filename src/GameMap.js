@@ -6,11 +6,7 @@ var turnCache = { _hits: 0 };
 var roundCache = { _hits: 0 };
 
 function GameMap(initalMap) {
-  this._map = new Array(6);
-  for (var x = 0; x < 6; x++) {
-    this._map[x] = [].concat(initalMap[x]);
-  }
-
+  this._map = initalMap;
   this._debug = false;
 }
 
@@ -20,8 +16,32 @@ GameMap.prototype.debug = function debug(message) {
   }
 };
 
+GameMap.prototype.serialize = function serialize() {
+  var x, y, row, rowLen, out = '';
+  for (x = 0; x < 6; x++) {
+    row = this._map[x];
+    rowLen = row.length;
+    for (y = 0; y < rowLen; y++) {
+      out += row[y];
+    }
+
+    out += '|';
+  }
+
+  return out;
+};
+
 GameMap.prototype.clone = function clone() {
-  return new GameMap(this._map);
+  return new GameMap(this.cloneMap(this._map));
+};
+
+GameMap.prototype.cloneMap = function cloneMap(original) {
+  var map = new Array(6);
+  for (var x = 0; x < 6; x++) {
+    map[x] = [].concat(original[x]);
+  }
+
+  return map;
 };
 
 var rotations = [1, 0, -1, 0];
@@ -40,24 +60,24 @@ GameMap.prototype.add = function add(block, column1, rotation) {
     return false;
   }
 
-  var firstBlock = 0, secondBlock = 1;
   if (rotation === 3) {
-    firstBlock = 1;
-    secondBlock = 0;
+    this._map[column1].push(block[1]);
+    this._map[column2].push(block[0]);
+  } else {
+    this._map[column1].push(block[0]);
+    this._map[column2].push(block[1]);
   }
-
-  this._map[column1].push(block[firstBlock]);
-  this._map[column2].push(block[secondBlock]);
 
   return this.calcTurnScore();
 };
 
 GameMap.prototype.calcTurnScore = function calcTurnScore() {
-  var id = JSON.stringify(this._map);
-  if (turnCache[id]) {
+  var id = this.serialize();
+  var tc = turnCache[id];
+  if (tc) {
     turnCache._hits++;
-    this._map = JSON.parse(turnCache[id].map);
-    return turnCache[id].turnScore;
+    this._map = this.cloneMap(tc.map);
+    return tc.turnScore;
   }
 
   var turnScore = {
@@ -90,7 +110,7 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
   }
 
   turnCache[id] = {
-    map: JSON.stringify(this._map),
+    map: this.cloneMap(this._map),
     turnScore: turnScore
   };
 
@@ -98,19 +118,22 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
 };
 
 GameMap.prototype.calcRoundScore = function calcRoundScore() {
-  var id = JSON.stringify(this._map);
-  var x, y, i, cell;
-  if (roundCache[id]) {
+  var id = this.serialize();
+  var x, y, i, cell, len;
+  var rc = roundCache[id];
+
+  if (rc) {
     roundCache._hits++;
-    this._map = JSON.parse(roundCache[id].map);
-    return roundCache[id].roundScore;
+    this._map = this.cloneMap(rc.map);
+    return rc.roundScore;
   }
 
   this._labels = [];
   this._labelsMap = [[], [], [], [], [], []];
 
   for (x = 0; x < 6; x++) {
-    for (y = 0; y < this._map[x].length; y++) {
+    len = this._map[x].length;
+    for (y = 0; y < len; y++) {
       cell = this._map[x][y];
 
       if (cell !== 0 && !this._labelsMap[x][y]) {
@@ -131,7 +154,9 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
   var groupBonus = 0;
   var destroyedColors = {};
   var destroyedSkulls = 0;
-  for (i = 0; i < this._labels.length; i++) {
+
+  var labelsLength = this._labels.length;
+  for (i = 0; i < labelsLength; i++) {
     var label = this._labels[i];
     if (label.cellsCount >= 4) {
       // happy time !
@@ -144,7 +169,8 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
       }
 
       destroyedColors[label.color] = true;
-      for (x = 0; x < label.cellsToRemove.length; x++) {
+      var cellsToRemoveLength = label.cellsToRemove.length;
+      for (x = 0; x < cellsToRemoveLength; x++) {
         cell = label.cellsToRemove[x];
         this._map[cell[0]][cell[1]] = null;
       }
@@ -174,7 +200,7 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
   };
 
   roundCache[id] = {
-    map: JSON.stringify(this._map),
+    map: this.cloneMap(this._map),
     roundScore: roundScore
   };
 
@@ -234,6 +260,13 @@ GameMap.prototype.debugMap = function debugMap() {
   }
 
   printErr('------');
+};
+
+GameMap.resetCache = function () {
+  turnCache = { _hits: 0 };
+  roundCache = { _hits: 0 };
+  GameMap.turnCache = turnCache;
+  GameMap.roundCache = roundCache;
 };
 
 GameMap.turnCache = turnCache;
