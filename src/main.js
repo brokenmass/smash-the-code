@@ -4,6 +4,9 @@ var GameMap = require('./GameMap');
 var Evolution = require('./Evolution');
 
 // game loop
+var points = [0, 0];
+var stores = [[], []];
+
 while (true) {
   var i, x, y;
   var maps = new Array(2);
@@ -31,15 +34,58 @@ while (true) {
     maps[i] = new GameMap(map);
   }
 
-  var evolution = new Evolution(maps[0], blocks);
-  var result = evolution.evolve();
+  var enemyEvolution = new Evolution({
+    map: maps[1],
+    blocks: blocks,
+    phenotypes: stores[1],
+    steps: 4,
+    //minPoints: 420,
+    optimizeFor: 1,
+    generations: 30,
+    populationSize: 50,
+    immigration: 2,
+    maxRuntime: 20
+  });
+  var attackingAt = null;
+  var enemyEvolutionResult = enemyEvolution.evolve();
+  stores[1] = enemyEvolution.store;
+  if (enemyEvolutionResult.best) {
+    var enemyResults = enemyEvolutionResult.best.fitness.results;
+    for (i = 0; i < enemyResults.length; i++) {
+      if (enemyResults[i].points && enemyResults[i].points > 420) {
+        attackingAt = i;
+        break;
+      }
+    }
+  }
 
+  var evolutionConfig = {
+    map: maps[0],
+    blocks: blocks,
+    phenotypes: stores[0],
+    maxRuntime: 85 - enemyEvolutionResult.runStats.totalRunTime
+  };
+  var message = ' ';
+  if (attackingAt !== null) {
+    message += 'ENEMY ATTACKING in ' + attackingAt + ' turns';
+    printErr('PREVENTION MODE');
+    evolutionConfig.optimizeFor = Math.max(0, attackingAt - 1);
+    if (attackingAt === 0) {
+      evolutionConfig.steps = 1;
+    }
+  }
+
+  var evolution = new Evolution(evolutionConfig);
+  var result = evolution.evolve();
+  stores[0] = result.store;
   printErr(JSON.stringify(result.lastGenerationStats));
-  printErr(JSON.stringify(result.runStats));
-  printErr('roundCache', GameMap.roundCache._hits);
-  printErr('turnCache', GameMap.turnCache._hits);
-  printErr(JSON.stringify(result.best));
+  printErr(JSON.stringify(result.runStats.testedPhenotypes));
+  printErr(JSON.stringify(result.best.phenotype));
 
   var bestAction = result.best.phenotype[0] + ' ' + result.best.phenotype[1];
-  print(bestAction, Math.round(result.best.fitness));
+  var roundPoint = result.best.fitness.results[0].points;
+  points[0] += roundPoint;
+  printErr('ROUND', roundPoint);
+  printErr('TOTAL', points[0]);
+  print(bestAction, ~~(result.best.fitness.summary) + message);
 }

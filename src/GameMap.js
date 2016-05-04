@@ -49,13 +49,15 @@ GameMap.prototype.add = function add(block, column1, rotation) {
 
   var column2 = column1 + rotations[rotation];
   if (column2 < 0 || column2 >= 6) {
-    //printErr(action + ' - out of bound');
     return false;
   }
 
+  var col1Len = this._map[column1].length;
+  var col2Len = this._map[column2].length;
+
   if (
-    (column1 === column2 && (this._map[column1].length > 10)) ||
-    (column1 !== column2 && (this._map[column1].length > 11 || this._map[column2].length > 11))
+    (column1 === column2 && col1Len > 10) ||
+    (column1 !== column2 && (col1Len > 11 || col2Len > 11))
   ) {
     return false;
   }
@@ -83,6 +85,7 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
   var turnScore = {
     points: 0,
     labelPoints: 0,
+    heightPoints: 0,
     destroyedSkulls: 0,
     chains: -1
   };
@@ -109,6 +112,16 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
     turnScore.labelPoints = roundScore.labelPoints;
   }
 
+  var maxHeight = 0;
+  for (var i = 0; i < 6; i++) {
+    var height = this._map[i].length;
+    if (height > maxHeight) {
+      maxHeight = height;
+    }
+  }
+
+  turnScore.heightPoints = maxHeight;
+
   turnCache[id] = {
     map: this.cloneMap(this._map),
     turnScore: turnScore
@@ -128,23 +141,24 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
     return rc.roundScore;
   }
 
-  this._labels = [];
-  this._labelsMap = [[], [], [], [], [], []];
+  var labels = [];
+  var labelsMap = [[], [], [], [], [], []];
 
   for (x = 0; x < 6; x++) {
     len = this._map[x].length;
     for (y = 0; y < len; y++) {
       cell = this._map[x][y];
 
-      if (cell !== 0 && !this._labelsMap[x][y]) {
+      if (cell !== 0 && !labelsMap[x][y]) {
         var newLabel = {
           color: cell,
+          reachable: false,
           cellsCount: 0,
           skullsCount: 0,
           cellsToRemove: []
         };
-        this._labels.push(newLabel);
-        this.dfs(x, y, newLabel);
+        labels.push(newLabel);
+        this.dfs(x, y, newLabel, labelsMap);
       }
     }
   }
@@ -155,9 +169,9 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
   var destroyedColors = {};
   var destroyedSkulls = 0;
 
-  var labelsLength = this._labels.length;
+  var labelsLength = labels.length;
   for (i = 0; i < labelsLength; i++) {
-    var label = this._labels[i];
+    var label = labels[i];
     if (label.cellsCount >= 4) {
       // happy time !
       points += (10 * label.cellsCount);
@@ -175,7 +189,8 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
         this._map[cell[0]][cell[1]] = null;
       }
     } else {
-      labelPoints += label.cellsCount * label.cellsCount * label.cellsCount;
+      var groupPoint = label.cellsCount * label.cellsCount * label.cellsCount / 10;
+      labelPoints += groupPoint * (label.reachable ? label.cellsCount : 1);
     }
   }
 
@@ -187,14 +202,13 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
     }
   }
 
-  //printErr(JSON.stringify(this._labels));
   var colorBonus = Object.keys(destroyedColors).length - 1;
 
   var roundScore = {
     points: points,
     labelPoints: labelPoints,
     destroyedSkulls: destroyedSkulls,
-    labelsCount: this._labels.length,
+    labelsCount: labels.length,
     colorBonus: colorBonus,
     groupBonus: groupBonus
   };
@@ -209,7 +223,7 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
 
 var dx = [+1, 0, -1, 0];
 var dy = [0, +1, 0, -1];
-GameMap.prototype.dfs = function dfs(x, y, currentLabel) {
+GameMap.prototype.dfs = function dfs(x, y, currentLabel, labelsMap) {
   if (
       (x < 0 || x >= 6) || // out of bounds
       (y < 0 || y >= 12) // out of bounds
@@ -218,10 +232,12 @@ GameMap.prototype.dfs = function dfs(x, y, currentLabel) {
   }
 
   var cell = this._map[x][y];
-  if (
-      (cell === undefined) || // invalid cell
-      (this._labelsMap[x][y]) // already labeled
-    ) {
+  if (cell === undefined) { // empty cell
+    currentLabel.reachable = true;
+    return;
+  }
+
+  if (labelsMap[x][y]) { // already labeled
     return;
   }
 
@@ -236,14 +252,14 @@ GameMap.prototype.dfs = function dfs(x, y, currentLabel) {
   if (cell === currentLabel.color) {
     // mark the current cell
     currentLabel.cellsToRemove.push([x, y]);
-    this._labelsMap[x][y] = true;
+    labelsMap[x][y] = true;
 
     // increment cell counter
     currentLabel.cellsCount++;
 
     // recursively mark the neighbors
     for (var direction = 0; direction < 4; ++direction) {
-      this.dfs(x + dx[direction], y + dy[direction], currentLabel);
+      this.dfs(x + dx[direction], y + dy[direction], currentLabel, labelsMap);
     }
   }
 };
@@ -271,4 +287,5 @@ GameMap.resetCache = function () {
 
 GameMap.turnCache = turnCache;
 GameMap.roundCache = roundCache;
+
 module.exports = GameMap;

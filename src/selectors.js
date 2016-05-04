@@ -5,7 +5,7 @@ function tournamentX(size) {
     var n = population.length;
     var group = new Array(size);
     for (var i = 0; i < size; i++) {
-      group[i] = population[Math.floor(Math.random() * n)];
+      group[i] = population[~~(Math.random() * n)];
     }
 
     return group.sort(scope._comparisonFunction)[0].phenotype;
@@ -22,12 +22,12 @@ var select1 = {
   },
 
   random: function (scope, population) {
-    return population[Math.floor(Math.random() * population.length)].phenotype;
+    return population[~~(Math.random() * population.length)].phenotype;
   },
 
   randomLinearRank: function (scope, population) {
     this._internalState.rlr = this._internalState.rlr || 0;
-    var index = Math.floor(Math.random() * Math.min(population.length, (this._internalState.rlr++)));
+    var index = ~~(Math.random() * Math.min(population.length, (this._internalState.rlr++)));
     return population[index].phenotype;
   },
 

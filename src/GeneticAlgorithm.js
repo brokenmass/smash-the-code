@@ -27,7 +27,7 @@ var DEFAULTS = {
   // At every generation ~<( <crossoverRate> * <populationSize> )> individuals will breed and generate
   // new individual using the <crossoverFunction> to mix their phenotypes
   // and the new indivuals will be added to the next generation.
-  crossoverRate: 0.6,
+  crossoverRate: 0.5,
   crossoverFunction: function (phenotypeA, phenotypeB) {
     return [phenotypeA, phenotypeB];
   },
@@ -36,7 +36,7 @@ var DEFAULTS = {
   // moves to the next generation
   // Of these <(<mutationRate> * 100)>% mutates using <mutationFunction>
   // and the mutation result will be added to the next generation
-  mutationRate: 0.1,
+  mutationRate: 0.3,
   mutationFunction: function (phenotype) {
     return phenotype;
   },
@@ -62,6 +62,16 @@ var DEFAULTS = {
   // return true to terminate
   terminationFunction: function (generation, population, stats) {
     return false;
+  },
+
+  statsFunction: function (generation, population) {
+    var deaths = this._populationSize - population.length;
+
+    return {
+      maximum: population[0].fitness,
+      minimum: population[population.length - 1].fitness,
+      deaths: deaths
+    };
   },
 
   select1: selectors.select1.tournament3,
@@ -91,26 +101,20 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
     this._internalState = {};
 
     // score and sort
-    var totalFitness = 0;
-    population = this._phenotypes
-      .map(function (phenotype) {
-        var fitness = _this._fitnessFunction(phenotype);
-        totalFitness += fitness;
-        return {
-          fitness: fitness,
-          phenotype: phenotype
-        };
-      })
+    var phenotypesLen = this._phenotypes.length;
+    population = new Array(phenotypesLen);
+    for (var x = 0; x < phenotypesLen; x++) {
+      var phenotype = this._phenotypes[x];
+      var fitness = _this._fitnessFunction(phenotype);
+      population[x] = {
+        fitness: fitness,
+        phenotype: phenotype
+      };
+    }
+
+    population = population
+      .filter(this._surviveFunction)
       .sort(this._comparisonFunction);
-
-    var mean = totalFitness / population.length;
-    var stDev = Math.sqrt(population
-      .map(function (entity) {
-        return (entity.fitness - mean) * (entity.fitness - mean);
-      })
-      .reduce(function (a, b) { return a + b; }) / population.length);
-
-    population = population.filter(this._surviveFunction);
 
     if (population.length === 0) {
       // All dead ! reseed
@@ -123,15 +127,7 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
       continue;
     }
 
-    var deaths = this._populationSize - population.length;
-
-    stats = {
-      maximum: population[0].fitness,
-      minimum: population[population.length - 1].fitness,
-      mean: mean,
-      stDev: stDev,
-      deaths: deaths
-    };
+    stats = this._statsFunction(generation, population);
 
     if (this._terminationFunction(generation, population, stats)) {
       break;
@@ -145,7 +141,7 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
     }
 
     while (i < this._elitarism + this._immigration) {
-      nextPhenotypes[i] = this._seedFunction(i, 0);
+      nextPhenotypes[i++] = this._seedFunction(i, 0);
       i++;
     }
 
@@ -156,17 +152,15 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
       ) {
         var parents = this._select2(this, population);
         var childs = this._crossoverFunction(parents[0], parents[1]);
-        nextPhenotypes[i] = childs[0];
-        nextPhenotypes[i + 1] = childs[1];
-        i += 2;
+        nextPhenotypes[i++] = childs[0];
+        nextPhenotypes[i++] = childs[1];
       } else {
-        var phenotype = this._select1(this, population);
+        var selectedPhenotype = this._select1(this, population);
         if (Math.random() < this._mutationRate) {
-          phenotype = this._mutationFunction(phenotype);
+          selectedPhenotype = this._mutationFunction(selectedPhenotype);
         }
 
-        nextPhenotypes[i] = phenotype;
-        i++;
+        nextPhenotypes[i++] = selectedPhenotype;
       }
     }
 
