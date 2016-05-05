@@ -13,19 +13,14 @@ for (x = 0; x < 6; x++) {
 
 console.log(a);
 
-function clone1(array) {
-  return JSON.parse(JSON.stringify(array));
+function clone1(serialized) {
+  return JSON.parse(serialized);
 }
 
-function clone2(array) {
-  var b = new Array(6);
-  for (x = 0; x < 6; x++) {
-    b[x] = [].concat(array[x]);
-  }
-
+function clone2(input) {
   var c = new Array(6);
   for (x = 0; x < 6; x++) {
-    c[x] = [].concat(b[x]);
+    c[x] = [].concat(input[x]);
   }
 
   return c;
@@ -44,42 +39,51 @@ function serialize3(array) {
   return out
 }
 
-function clone3(array) {
-  var b = serialize3(array);
-
+function clone3(serialized) {
   var c = [[],[],[],[],[],[]];
   var i = 0, x = 0, y = 0;
-  for (i = 0; i < b.length; i++, y++) {
-    if(b[i] === '|') {
+  for (i = 0; i < serialized.length; i++, y++) {
+    if(serialized[i] === '|') {
       x++;
       y = -1;
     } else {
-      c[x][y] = +b[i];
+      c[x][y] = +serialized[i];
     }
   }
 
   return c;
 }
 
+
+var serialized;
+
+serialized = JSON.stringify(a)
 console.time('clone1');
 for (y = 0; y < BENCHMARK_COUNT; y++) {
-  out = clone1(a);
+  out = clone1(serialized);
 }
 
 console.timeEnd('clone1');
 console.log(out);
 
+var input = new Array(6);
+for (x = 0; x < 6; x++) {
+  input[x] = [].concat(a[x]);
+}
 console.time('clone2');
 for (y = 0; y < BENCHMARK_COUNT; y++) {
-  out = clone2(a);
+  out = clone2(input);
 }
 
 console.timeEnd('clone2');
 console.log(out);
 
+
+
+serialized = serialize3(a);
 console.time('clone3');
 for (y = 0; y < BENCHMARK_COUNT; y++) {
-  out = clone3(a);
+  out = clone3(serialized);
 }
 
 console.timeEnd('clone3');

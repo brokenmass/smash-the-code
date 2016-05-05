@@ -38,28 +38,34 @@ while (true) {
     map: maps[1],
     blocks: blocks,
     phenotypes: stores[1],
-    steps: 4,
-    //minPoints: 420,
-    optimizeFor: 1,
-    generations: 30,
-    populationSize: 50,
+    steps: 6,
+    generations: 20,
+    populationSize: 40,
     immigration: 2,
     maxRuntime: 20
   });
+  var totalEnemyNuisance = 0;
+  var enemyNuisance = [0, 0, 0, 0, 0, 0, 0, 0];
   var attackingAt = null;
   var enemyEvolutionResult = enemyEvolution.evolve();
   stores[1] = enemyEvolution.store;
   if (enemyEvolutionResult.best) {
-    var enemyResults = enemyEvolutionResult.best.fitness.results;
+    var enemyResults = enemyEvolutionResult.best.results;
     for (i = 0; i < enemyResults.length; i++) {
-      if (enemyResults[i].points && enemyResults[i].points > 420) {
-        attackingAt = i;
-        break;
+      if (enemyResults[i].points) {
+        totalEnemyNuisance += (enemyResults[i].points / 70);
+        if (totalEnemyNuisance > 6) {
+          enemyNuisance[i] = ~~(totalEnemyNuisance / 6);
+          totalEnemyNuisance -= (enemyNuisance[i] * 6);
+          attackingAt = attackingAt !== null ? attackingAt : i;
+        }
       }
     }
   }
 
+  printErr('enemyNuisance', enemyNuisance);
   var evolutionConfig = {
+    enemyNuisance: enemyNuisance,
     map: maps[0],
     blocks: blocks,
     phenotypes: stores[0],
@@ -67,12 +73,8 @@ while (true) {
   };
   var message = ' ';
   if (attackingAt !== null) {
-    message += 'ENEMY ATTACKING in ' + attackingAt + ' turns';
+    message += 'ENEMY will attack in ' + attackingAt + ' turns';
     printErr('PREVENTION MODE');
-    evolutionConfig.optimizeFor = Math.max(0, attackingAt - 1);
-    if (attackingAt === 0) {
-      evolutionConfig.steps = 1;
-    }
   }
 
   var evolution = new Evolution(evolutionConfig);
@@ -80,12 +82,15 @@ while (true) {
   stores[0] = result.store;
   printErr(JSON.stringify(result.lastGenerationStats));
   printErr(JSON.stringify(result.runStats.testedPhenotypes));
-  printErr(JSON.stringify(result.best.phenotype));
-
-  var bestAction = result.best.phenotype[0] + ' ' + result.best.phenotype[1];
-  var roundPoint = result.best.fitness.results[0].points;
-  points[0] += roundPoint;
-  printErr('ROUND', roundPoint);
-  printErr('TOTAL', points[0]);
-  print(bestAction, ~~(result.best.fitness.summary) + message);
+  printErr(JSON.stringify(result.runStats));
+  if (result.best) {
+    var bestAction = result.best.phenotype[0] + ' ' + result.best.phenotype[1];
+    var roundPoint = result.best.results[0].points;
+    points[0] += roundPoint;
+    printErr('ROUND', roundPoint);
+    printErr('TOTAL', points[0]);
+    print(bestAction, ~~(result.best.fitness) + message);
+  } else {
+    print('3 0');
+  }
 }

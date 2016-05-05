@@ -84,28 +84,34 @@
 	    map: maps[1],
 	    blocks: blocks,
 	    phenotypes: stores[1],
-	    steps: 4,
-	    //minPoints: 420,
-	    optimizeFor: 1,
-	    generations: 30,
-	    populationSize: 50,
+	    steps: 6,
+	    generations: 20,
+	    populationSize: 40,
 	    immigration: 2,
 	    maxRuntime: 20
 	  });
+	  var totalEnemyNuisance = 0;
+	  var enemyNuisance = [0, 0, 0, 0, 0, 0, 0, 0];
 	  var attackingAt = null;
 	  var enemyEvolutionResult = enemyEvolution.evolve();
 	  stores[1] = enemyEvolution.store;
 	  if (enemyEvolutionResult.best) {
-	    var enemyResults = enemyEvolutionResult.best.fitness.results;
+	    var enemyResults = enemyEvolutionResult.best.results;
 	    for (i = 0; i < enemyResults.length; i++) {
-	      if (enemyResults[i].points && enemyResults[i].points > 420) {
-	        attackingAt = i;
-	        break;
+	      if (enemyResults[i].points) {
+	        totalEnemyNuisance += (enemyResults[i].points / 70);
+	        if (totalEnemyNuisance > 6) {
+	          enemyNuisance[i] = ~~(totalEnemyNuisance / 6);
+	          totalEnemyNuisance -= (enemyNuisance[i] * 6);
+	          attackingAt = attackingAt !== null ? attackingAt : i;
+	        }
 	      }
 	    }
 	  }
 
+	  printErr('enemyNuisance', enemyNuisance);
 	  var evolutionConfig = {
+	    enemyNuisance: enemyNuisance,
 	    map: maps[0],
 	    blocks: blocks,
 	    phenotypes: stores[0],
@@ -113,12 +119,8 @@
 	  };
 	  var message = ' ';
 	  if (attackingAt !== null) {
-	    message += 'ENEMY ATTACKING in ' + attackingAt + ' turns';
+	    message += 'ENEMY will attack in ' + attackingAt + ' turns';
 	    printErr('PREVENTION MODE');
-	    evolutionConfig.optimizeFor = Math.max(0, attackingAt - 1);
-	    if (attackingAt === 0) {
-	      evolutionConfig.steps = 1;
-	    }
 	  }
 
 	  var evolution = new Evolution(evolutionConfig);
@@ -126,14 +128,17 @@
 	  stores[0] = result.store;
 	  printErr(JSON.stringify(result.lastGenerationStats));
 	  printErr(JSON.stringify(result.runStats.testedPhenotypes));
-	  printErr(JSON.stringify(result.best.phenotype));
-
-	  var bestAction = result.best.phenotype[0] + ' ' + result.best.phenotype[1];
-	  var roundPoint = result.best.fitness.results[0].points;
-	  points[0] += roundPoint;
-	  printErr('ROUND', roundPoint);
-	  printErr('TOTAL', points[0]);
-	  print(bestAction, ~~(result.best.fitness.summary) + message);
+	  printErr(JSON.stringify(result.runStats));
+	  if (result.best) {
+	    var bestAction = result.best.phenotype[0] + ' ' + result.best.phenotype[1];
+	    var roundPoint = result.best.results[0].points;
+	    points[0] += roundPoint;
+	    printErr('ROUND', roundPoint);
+	    printErr('TOTAL', points[0]);
+	    print(bestAction, ~~(result.best.fitness) + message);
+	  } else {
+	    print('3 0');
+	  }
 	}
 
 
@@ -216,12 +221,22 @@
 	  return this.calcTurnScore();
 	};
 
+	GameMap.prototype.addNuisance = function (nuisanceLines) {
+	  var nuisance = (new Array(nuisanceLines)).fill(0);
+	  for (var x = 0; x < 6; x++) {
+	    this._map[x] = this._map[x].concat(nuisance);
+	  }
+	};
+
 	GameMap.prototype.calcTurnScore = function calcTurnScore() {
 	  var id = this.serialize();
 	  var tc = turnCache[id];
 	  if (tc) {
 	    turnCache._hits++;
-	    this._map = this.cloneMap(tc.map);
+	    if (tc.turnScore.points) {
+	      this._map = this.cloneMap(tc.map);
+	    }
+
 	    return tc.turnScore;
 	  }
 
@@ -234,7 +249,6 @@
 	  };
 
 	  var roundScore = this.calcRoundScore();
-	  turnScore.labelPoints = roundScore.labelPoints;
 	  while (roundScore.points) {
 	    turnScore.chains++;
 	    var bonus = roundScore.groupBonus;
@@ -252,8 +266,10 @@
 	    turnScore.destroyedSkulls += roundScore.destroyedSkulls;
 
 	    roundScore = this.calcRoundScore();
-	    turnScore.labelPoints = roundScore.labelPoints;
+
 	  }
+
+	  turnScore.labelPoints = roundScore.labelPoints;
 
 	  var maxHeight = 0;
 	  for (var i = 0; i < 6; i++) {
@@ -266,7 +282,7 @@
 	  turnScore.heightPoints = maxHeight;
 
 	  turnCache[id] = {
-	    map: this.cloneMap(this._map),
+	    map: turnScore.points ? this.cloneMap(this._map) : null,
 	    turnScore: turnScore
 	  };
 
@@ -280,8 +296,11 @@
 
 	  if (rc) {
 	    roundCache._hits++;
-	    this._map = this.cloneMap(rc.map);
-	    return rc.roundScore;
+	    if (rc.roundScore.points) {
+	      this._map = this.cloneMap(rc.map);
+	    }
+
+	    return rc;
 	  }
 
 	  var labels = [];
@@ -293,13 +312,8 @@
 	      cell = this._map[x][y];
 
 	      if (cell !== 0 && !labelsMap[x][y]) {
-	        var newLabel = {
-	          color: cell,
-	          reachable: false,
-	          cellsCount: 0,
-	          skullsCount: 0,
-	          cellsToRemove: []
-	        };
+	        // cell, reachable, cellsCount, skullsCount, removeX, removeY,...
+	        var newLabel = [cell, 0, 0, 0];
 	        labels.push(newLabel);
 	        this.dfs(x, y, newLabel, labelsMap);
 	      }
@@ -315,25 +329,25 @@
 	  var labelsLength = labels.length;
 	  for (i = 0; i < labelsLength; i++) {
 	    var label = labels[i];
-	    if (label.cellsCount >= 4) {
+	    var cellsCount = label[2];
+	    if (cellsCount >= 4) {
 	      // happy time !
-	      points += (10 * label.cellsCount);
-	      destroyedSkulls += label.skullsCount;
-	      if (label.cellsCount >= 11) {
+	      points += (10 * cellsCount);
+	      destroyedSkulls += label[3];
+	      if (cellsCount >= 11) {
 	        groupBonus += 8;
 	      } else {
-	        groupBonus += label.cellsCount - 4;
+	        groupBonus += cellsCount - 4;
 	      }
 
-	      destroyedColors[label.color] = true;
-	      var cellsToRemoveLength = label.cellsToRemove.length;
-	      for (x = 0; x < cellsToRemoveLength; x++) {
-	        cell = label.cellsToRemove[x];
-	        this._map[cell[0]][cell[1]] = null;
+	      destroyedColors[label[0]] = true;
+	      var cellsToRemoveLength = label.length;
+	      for (x = 4; x < cellsToRemoveLength; x += 2) {
+	        this._map[label[x]][label[x + 1]] = null;
 	      }
 	    } else {
-	      var groupPoint = label.cellsCount * label.cellsCount * label.cellsCount / 10;
-	      labelPoints += groupPoint * (label.reachable ? label.cellsCount : 1);
+	      var groupPoint = cellsCount * cellsCount * cellsCount / 10;
+	      labelPoints += groupPoint * (label[1] ? cellsCount : 1);
 	    }
 	  }
 
@@ -357,7 +371,7 @@
 	  };
 
 	  roundCache[id] = {
-	    map: this.cloneMap(this._map),
+	    map: points ? this.cloneMap(this._map) : null,
 	    roundScore: roundScore
 	  };
 
@@ -376,7 +390,7 @@
 
 	  var cell = this._map[x][y];
 	  if (cell === undefined) { // empty cell
-	    currentLabel.reachable = true;
+	    currentLabel[1]++;
 	    return;
 	  }
 
@@ -386,19 +400,21 @@
 
 	  if (cell === 0) {
 	    // mark the cell only as one to remove
-	    currentLabel.cellsToRemove.push([x, y]);
+	    currentLabel.push(x);
+	    currentLabel.push(y);
 
 	    // increment skull counter
-	    currentLabel.skullsCount++;
+	    currentLabel[3]++;
 	  }
 
-	  if (cell === currentLabel.color) {
+	  if (cell === currentLabel[0]) {
 	    // mark the current cell
-	    currentLabel.cellsToRemove.push([x, y]);
+	    currentLabel.push(x);
+	    currentLabel.push(y);
 	    labelsMap[x][y] = true;
 
 	    // increment cell counter
-	    currentLabel.cellsCount++;
+	    currentLabel[2]++;
 
 	    // recursively mark the neighbors
 	    for (var direction = 0; direction < 4; ++direction) {
@@ -412,7 +428,7 @@
 	  for (var y = 11; y >= 0; y--) {
 	    var row = '';
 	    for (var x = 0; x < 6; x++) {
-	      row += this._map[x][y] ? colors[this._map[x][y]][0] : '.';
+	      row += this._map[x][y] !== undefined ? colors[this._map[x][y]][0] : '.';
 	    }
 
 	    printErr(row);
@@ -456,13 +472,13 @@
 	  map: null,
 	  blocks: null,
 	  steps: 8,
-	  optimizeFor: 4,
-	  generations: 60,
-	  populationSize: 60,
-	  immigration: 10,
-	  maxRuntime: 90,
-	  minPoints: 800,
-	  phenotypes: []
+	  generations: 100,
+	  populationSize: 50,
+	  immigration: 5,
+	  maxRuntime: 85,
+	  minPoints: 420,
+	  phenotypes: [],
+	  enemyNuisance: [0, 0, 0, 0, 0, 0, 0, 0]
 	};
 
 	function Evolution(options) {
@@ -502,16 +518,16 @@
 	  for (var i = 0; i < length; i += 2) {
 	    var rotation = ~~(Math.random() * 4);
 	    var minColumn = 0;
-	    var colcount = 6;
+	    var colCount = 6;
 	    if (rotation === 0) {
 	      minColumn = 0;
-	      colcount = 5;
+	      colCount = 5;
 	    } else if (rotation === 2) {
 	      minColumn = 1;
-	      colcount = 5;
+	      colCount = 5;
 	    }
 
-	    var column = minColumn + (~~(Math.random() * colcount));
+	    var column = minColumn + (~~(Math.random() * colCount));
 	    phenotype[i] = column;
 	    phenotype[i + 1] = rotation;
 	  }
@@ -519,52 +535,49 @@
 	  return phenotype;
 	};
 
-	var roundMultiplier = [20, 15, 10, 8, 6, 4, 2, 1];
 	Evolution.prototype.fitnessFunction = function fitnessFunction(phenotype) {
 	  var map = this._map.clone();
-	  var totalFitness = 0;
+	  var fitness = 0;
 	  var turnIndex = 0;
 	  var len = phenotype.length;
 	  var results = [];
-	  for (var x = 0; x < len && turnIndex < this._steps; x += 2, turnIndex++) {
+	  for (var x = 0; x < len; x += 2, turnIndex++) {
 	    var result = map.add(this._blocks[turnIndex], phenotype[x], phenotype[x + 1]);
 	    if (!result) {
-	      totalFitness = -100;
+	      fitness = -100;
 	      break;
 	    } else {
 	      results[turnIndex] = result;
 	      var turnFitness = result.labelPoints + result.heightPoints;
 	      if (result.points > this._minPoints) {
-	        turnFitness += result.points + result.destroyedSkulls;
+	        turnFitness += result.points;
 	      }
 
-	      if (turnIndex > this._optimizeFor) {
-	        turnFitness /= (1 + turnIndex);
-	      } else {
-	        turnFitness /= (1 + turnIndex / 10);
-	      }
+	      fitness += ~~(turnFitness / (1 + turnIndex));
+	    }
 
-	      totalFitness += ~~turnFitness;
+	    if (this._enemyNuisance[x]) {
+	      map.addNuisance(this._enemyNuisance[x]);
 	    }
 	  }
 
 	  this._testedPhenotypes++;
 	  return {
-	    summary: totalFitness,
+	    fitness: fitness,
 	    results: results
 	  };
 	};
 
 	Evolution.prototype.comparisonFunction = function comparisonFunction(entityA, entityB) {
-	  return entityB.fitness.summary - entityA.fitness.summary;
+	  return entityB.fitness - entityA.fitness;
 	},
 
 	Evolution.prototype.statsFunction = function statsFunction(generation, population) {
 	  var deaths = this._populationSize - population.length;
 
 	  return {
-	    maximum: population[0].fitness.summary,
-	    minimum: population[population.length - 1].fitness.summary,
+	    maximum: population[0] && population[0].fitness,
+	    minimum: population[0] && population[population.length - 1].fitness,
 	    deaths: deaths
 	  };
 	};
@@ -575,7 +588,7 @@
 	  var child2 = new Array(length);
 	  var mother, father;
 
-	  for (var x = 0; x < length; x++) {
+	  for (var x = 0; x < length; x += 2) {
 	    if (!phenotypeA[x]) {
 	      mother = phenotypeB;
 	      father = phenotypeB;
@@ -591,7 +604,9 @@
 	    }
 
 	    child1[x] = mother[x];
+	    child1[x + 1] = mother[x + 1];
 	    child2[x] = father[x];
+	    child2[x + 1] = father[x + 1];
 	  }
 
 	  return [child1, child2];
@@ -603,23 +618,23 @@
 
 	  var rotation = ~~(Math.random() * 4);
 	  var minColumn = 0;
-	  var colcount = 6;
+	  var colCount = 6;
 	  if (rotation === 0) {
 	    minColumn = 0;
-	    colcount = 5;
+	    colCount = 5;
 	  } else if (rotation === 2) {
 	    minColumn = 1;
-	    colcount = 5;
+	    colCount = 5;
 	  }
 
-	  var column = minColumn + (~~(Math.random() * colcount));
+	  var column = minColumn + (~~(Math.random() * colCount));
 	  mutation[step] = column;
 	  mutation[step + 1] = rotation;
 	  return mutation;
 	};
 
 	Evolution.prototype.surviveFunction = function surviveFunction(entity) {
-	  return entity.fitness.summary >= 0;
+	  return entity.fitness >= 0;
 	};
 
 	Evolution.prototype.terminationFunction = function terminationFunction(generation, population, stats) {
@@ -631,11 +646,12 @@
 	  var timeout = (this._maxRuntime - (now - this._startTime)) < runTime;
 
 	  if (generation % 10 === 0 || timeout) {
-	    printErr('GA STATS', generation, JSON.stringify(stats));
+	    printErr(generation, stats.maximum, stats.minimum);
 	  }
 
 	  if (timeout) {
-	    printErr('TERMINATING', generation, JSON.stringify(stats));
+	    printErr(generation, stats.maximum, stats.minimum);
+	    printErr('TERMINATING');
 	  }
 
 	  return timeout;
@@ -655,16 +671,16 @@
 	    var phenotype = result.population[i].phenotype.slice(2); // remove first, obsolete, action
 	    var rotation = ~~(Math.random() * 4);
 	    var minColumn = 0;
-	    var colcount = 6;
+	    var colCount = 6;
 	    if (rotation === 0) {
 	      minColumn = 0;
-	      colcount = 5;
+	      colCount = 5;
 	    } else if (rotation === 2) {
 	      minColumn = 1;
-	      colcount = 5;
+	      colCount = 5;
 	    }
 
-	    var column = minColumn + (~~(Math.random() * colcount));
+	    var column = minColumn + (~~(Math.random() * colCount));
 	    phenotype.concat([column, rotation]);
 	    phenotypesStore[i] = phenotype;
 	  }
@@ -796,16 +812,20 @@
 	    population = new Array(phenotypesLen);
 	    for (var x = 0; x < phenotypesLen; x++) {
 	      var phenotype = this._phenotypes[x];
-	      var fitness = _this._fitnessFunction(phenotype);
-	      population[x] = {
-	        fitness: fitness,
-	        phenotype: phenotype
-	      };
+	      var result = _this._fitnessFunction(phenotype);
+	      result.phenotype = phenotype;
+	      population[x] = result;
 	    }
 
 	    population = population
 	      .filter(this._surviveFunction)
 	      .sort(this._comparisonFunction);
+
+	    stats = this._statsFunction(generation, population);
+
+	    if (this._terminationFunction(generation, population, stats)) {
+	      break;
+	    }
 
 	    if (population.length === 0) {
 	      // All dead ! reseed
@@ -818,12 +838,6 @@
 	      continue;
 	    }
 
-	    stats = this._statsFunction(generation, population);
-
-	    if (this._terminationFunction(generation, population, stats)) {
-	      break;
-	    }
-
 	    var i = 0;
 	    var nextPhenotypes = new Array(this._populationSize);
 	    while (i < this._elitarism) {
@@ -832,7 +846,7 @@
 	    }
 
 	    while (i < this._elitarism + this._immigration) {
-	      nextPhenotypes[i++] = this._seedFunction(i, 0);
+	      nextPhenotypes[i] = this._seedFunction(i, 0);
 	      i++;
 	    }
 

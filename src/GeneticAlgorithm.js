@@ -105,16 +105,20 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
     population = new Array(phenotypesLen);
     for (var x = 0; x < phenotypesLen; x++) {
       var phenotype = this._phenotypes[x];
-      var fitness = _this._fitnessFunction(phenotype);
-      population[x] = {
-        fitness: fitness,
-        phenotype: phenotype
-      };
+      var result = _this._fitnessFunction(phenotype);
+      result.phenotype = phenotype;
+      population[x] = result;
     }
 
     population = population
       .filter(this._surviveFunction)
       .sort(this._comparisonFunction);
+
+    stats = this._statsFunction(generation, population);
+
+    if (this._terminationFunction(generation, population, stats)) {
+      break;
+    }
 
     if (population.length === 0) {
       // All dead ! reseed
@@ -127,12 +131,6 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
       continue;
     }
 
-    stats = this._statsFunction(generation, population);
-
-    if (this._terminationFunction(generation, population, stats)) {
-      break;
-    }
-
     var i = 0;
     var nextPhenotypes = new Array(this._populationSize);
     while (i < this._elitarism) {
@@ -141,7 +139,7 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
     }
 
     while (i < this._elitarism + this._immigration) {
-      nextPhenotypes[i++] = this._seedFunction(i, 0);
+      nextPhenotypes[i] = this._seedFunction(i, 0);
       i++;
     }
 

@@ -73,12 +73,22 @@ GameMap.prototype.add = function add(block, column1, rotation) {
   return this.calcTurnScore();
 };
 
+GameMap.prototype.addNuisance = function (nuisanceLines) {
+  var nuisance = (new Array(nuisanceLines)).fill(0);
+  for (var x = 0; x < 6; x++) {
+    this._map[x] = this._map[x].concat(nuisance);
+  }
+};
+
 GameMap.prototype.calcTurnScore = function calcTurnScore() {
   var id = this.serialize();
   var tc = turnCache[id];
   if (tc) {
     turnCache._hits++;
-    this._map = this.cloneMap(tc.map);
+    if (tc.turnScore.points) {
+      this._map = this.cloneMap(tc.map);
+    }
+
     return tc.turnScore;
   }
 
@@ -91,7 +101,6 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
   };
 
   var roundScore = this.calcRoundScore();
-  turnScore.labelPoints = roundScore.labelPoints;
   while (roundScore.points) {
     turnScore.chains++;
     var bonus = roundScore.groupBonus;
@@ -109,8 +118,10 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
     turnScore.destroyedSkulls += roundScore.destroyedSkulls;
 
     roundScore = this.calcRoundScore();
-    turnScore.labelPoints = roundScore.labelPoints;
+
   }
+
+  turnScore.labelPoints = roundScore.labelPoints;
 
   var maxHeight = 0;
   for (var i = 0; i < 6; i++) {
@@ -123,7 +134,7 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
   turnScore.heightPoints = maxHeight;
 
   turnCache[id] = {
-    map: this.cloneMap(this._map),
+    map: turnScore.points ? this.cloneMap(this._map) : null,
     turnScore: turnScore
   };
 
@@ -137,8 +148,11 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
 
   if (rc) {
     roundCache._hits++;
-    this._map = this.cloneMap(rc.map);
-    return rc.roundScore;
+    if (rc.roundScore.points) {
+      this._map = this.cloneMap(rc.map);
+    }
+
+    return rc;
   }
 
   var labels = [];
@@ -150,13 +164,8 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
       cell = this._map[x][y];
 
       if (cell !== 0 && !labelsMap[x][y]) {
-        var newLabel = {
-          color: cell,
-          reachable: false,
-          cellsCount: 0,
-          skullsCount: 0,
-          cellsToRemove: []
-        };
+        // cell, reachable, cellsCount, skullsCount, removeX, removeY,...
+        var newLabel = [cell, 0, 0, 0];
         labels.push(newLabel);
         this.dfs(x, y, newLabel, labelsMap);
       }
@@ -172,25 +181,25 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
   var labelsLength = labels.length;
   for (i = 0; i < labelsLength; i++) {
     var label = labels[i];
-    if (label.cellsCount >= 4) {
+    var cellsCount = label[2];
+    if (cellsCount >= 4) {
       // happy time !
-      points += (10 * label.cellsCount);
-      destroyedSkulls += label.skullsCount;
-      if (label.cellsCount >= 11) {
+      points += (10 * cellsCount);
+      destroyedSkulls += label[3];
+      if (cellsCount >= 11) {
         groupBonus += 8;
       } else {
-        groupBonus += label.cellsCount - 4;
+        groupBonus += cellsCount - 4;
       }
 
-      destroyedColors[label.color] = true;
-      var cellsToRemoveLength = label.cellsToRemove.length;
-      for (x = 0; x < cellsToRemoveLength; x++) {
-        cell = label.cellsToRemove[x];
-        this._map[cell[0]][cell[1]] = null;
+      destroyedColors[label[0]] = true;
+      var cellsToRemoveLength = label.length;
+      for (x = 4; x < cellsToRemoveLength; x += 2) {
+        this._map[label[x]][label[x + 1]] = null;
       }
     } else {
-      var groupPoint = label.cellsCount * label.cellsCount * label.cellsCount / 10;
-      labelPoints += groupPoint * (label.reachable ? label.cellsCount : 1);
+      var groupPoint = cellsCount * cellsCount * cellsCount / 10;
+      labelPoints += groupPoint * (label[1] ? cellsCount : 1);
     }
   }
 
@@ -214,7 +223,7 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
   };
 
   roundCache[id] = {
-    map: this.cloneMap(this._map),
+    map: points ? this.cloneMap(this._map) : null,
     roundScore: roundScore
   };
 
@@ -233,7 +242,7 @@ GameMap.prototype.dfs = function dfs(x, y, currentLabel, labelsMap) {
 
   var cell = this._map[x][y];
   if (cell === undefined) { // empty cell
-    currentLabel.reachable = true;
+    currentLabel[1]++;
     return;
   }
 
@@ -243,19 +252,21 @@ GameMap.prototype.dfs = function dfs(x, y, currentLabel, labelsMap) {
 
   if (cell === 0) {
     // mark the cell only as one to remove
-    currentLabel.cellsToRemove.push([x, y]);
+    currentLabel.push(x);
+    currentLabel.push(y);
 
     // increment skull counter
-    currentLabel.skullsCount++;
+    currentLabel[3]++;
   }
 
-  if (cell === currentLabel.color) {
+  if (cell === currentLabel[0]) {
     // mark the current cell
-    currentLabel.cellsToRemove.push([x, y]);
+    currentLabel.push(x);
+    currentLabel.push(y);
     labelsMap[x][y] = true;
 
     // increment cell counter
-    currentLabel.cellsCount++;
+    currentLabel[2]++;
 
     // recursively mark the neighbors
     for (var direction = 0; direction < 4; ++direction) {
@@ -269,7 +280,7 @@ GameMap.prototype.debugMap = function debugMap() {
   for (var y = 11; y >= 0; y--) {
     var row = '';
     for (var x = 0; x < 6; x++) {
-      row += this._map[x][y] ? colors[this._map[x][y]][0] : '.';
+      row += this._map[x][y] !== undefined ? colors[this._map[x][y]][0] : '.';
     }
 
     printErr(row);
