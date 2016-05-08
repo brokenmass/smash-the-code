@@ -20,7 +20,7 @@ function clone1(serialized) {
 function clone2(input) {
   var c = new Array(6);
   for (x = 0; x < 6; x++) {
-    c[x] = [].concat(input[x]);
+    c[x] = input[x].slice();
   }
 
   return c;
@@ -47,7 +47,7 @@ function clone3(serialized) {
       x++;
       y = -1;
     } else {
-      c[x][y] = +serialized[i];
+      c[x][y] = serialized[i] | 0;
     }
   }
 
@@ -64,11 +64,12 @@ for (y = 0; y < BENCHMARK_COUNT; y++) {
 }
 
 console.timeEnd('clone1');
+console.log(serialized)
 console.log(out);
 
 var input = new Array(6);
 for (x = 0; x < 6; x++) {
-  input[x] = [].concat(a[x]);
+  input[x] = a[x].slice();
 }
 console.time('clone2');
 for (y = 0; y < BENCHMARK_COUNT; y++) {
@@ -87,4 +88,5 @@ for (y = 0; y < BENCHMARK_COUNT; y++) {
 }
 
 console.timeEnd('clone3');
+console.log(serialized)
 console.log(out);

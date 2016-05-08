@@ -1,0 +1,73 @@
+for (var i = 0; i < 8; i++) {
+    var inputs = readline().split(' ');
+    var colorA = parseInt(inputs[0]); // color of the first block
+    var colorB = parseInt(inputs[1]); // color of the attached block
+}
+for (var i = 0; i < 12; i++) {
+    var row = readline();
+}
+for (var i = 0; i < 12; i++) {
+    var row = readline(); // One line of the map ('.' = empty, '0' = skull block, '1' to '5' = colored block)
+}
+
+var bufferOriginal = new ArrayBuffer(6*12);
+
+
+var i =0;
+while(true) {
+  var buffer = bufferOriginal.slice();
+  var map = new Uint8ClampedArray(buffer);
+  for(var x = 0; x < 72; x++) {
+      map[x] = map[x] + 1;
+  }
+  i++;
+  if(i%100000 === 0) {
+    printErr(i)
+  }
+}
+
+
+
+
+
+for (var i = 0; i < 8; i++) {
+    var inputs = readline().split(' ');
+    var colorA = parseInt(inputs[0]); // color of the first block
+    var colorB = parseInt(inputs[1]); // color of the attached block
+}
+for (var i = 0; i < 12; i++) {
+    var row = readline();
+}
+for (var i = 0; i < 12; i++) {
+    var row = readline(); // One line of the map ('.' = empty, '0' = skull block, '1' to '5' = colored block)
+}
+
+var originalMap = [
+  (new Array(12)).fill(0),
+  (new Array(12)).fill(0),
+  (new Array(12)).fill(0),
+  (new Array(12)).fill(0),
+  (new Array(12)).fill(0),
+  (new Array(12)).fill(0)
+];
+
+var i =0;
+while(true) {
+  var map = [
+    [].concat(originalMap[0]),
+    [].concat(originalMap[0]),
+    [].concat(originalMap[0]),
+    [].concat(originalMap[0]),
+    [].concat(originalMap[0]),
+    [].concat(originalMap[0])
+  ]
+  for(var x = 0; x < 6; x++) {
+    for(var y = 0; y < 12; y++) {
+      map[x][y]++;
+    }
+  }
+  i++;
+  if(i%100000 === 0) {
+    printErr(i)
+  }
+}

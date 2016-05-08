@@ -31,6 +31,21 @@ GameMap.prototype.serialize = function serialize() {
   return out;
 };
 
+GameMap.prototype.deserialize = function deserialize(serialized) {
+  var out = [[], [], [], [], [], []];
+  var i = 0, x = 0, y = 0;
+  for (i = 0; i < serialized.length; i++, y++) {
+    if (serialized[i] === '|') {
+      x++;
+      y = -1;
+    } else {
+      out[x][y] = parseInt(serialized[i]);
+    }
+  }
+
+  return out;
+};
+
 GameMap.prototype.clone = function clone() {
   return new GameMap(this.cloneMap(this._map));
 };
@@ -38,7 +53,7 @@ GameMap.prototype.clone = function clone() {
 GameMap.prototype.cloneMap = function cloneMap(original) {
   var map = new Array(6);
   for (var x = 0; x < 6; x++) {
-    map[x] = [].concat(original[x]);
+    map[x] = original[x].slice();
   }
 
   return map;
@@ -86,7 +101,7 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
   if (tc) {
     turnCache._hits++;
     if (tc.turnScore.points) {
-      this._map = this.cloneMap(tc.map);
+      this._map = this.deserialize(tc.map);
     }
 
     return tc.turnScore;
@@ -131,29 +146,21 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
     }
   }
 
-  turnScore.heightPoints = maxHeight;
+  turnScore.heightPoints = maxHeight / 2;
 
-  turnCache[id] = {
-    map: turnScore.points ? this.cloneMap(this._map) : null,
-    turnScore: turnScore
-  };
+  if (id.length > 20) {
+    turnCache[id] = {
+      map: turnScore.points ? this.serialize(this._map) : null,
+      turnScore: turnScore
+    };
+  }
 
   return turnScore;
 };
 
+var groupPoints = [0, 1, 4, 20];
 GameMap.prototype.calcRoundScore = function calcRoundScore() {
-  var id = this.serialize();
   var x, y, i, cell, len;
-  var rc = roundCache[id];
-
-  if (rc) {
-    roundCache._hits++;
-    if (rc.roundScore.points) {
-      this._map = this.cloneMap(rc.map);
-    }
-
-    return rc;
-  }
 
   var labels = [];
   var labelsMap = [[], [], [], [], [], []];
@@ -198,8 +205,7 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
         this._map[label[x]][label[x + 1]] = null;
       }
     } else {
-      var groupPoint = cellsCount * cellsCount * cellsCount / 10;
-      labelPoints += groupPoint * (label[1] ? cellsCount : 1);
+      labelPoints += groupPoints[cellsCount] * (1 + 0.5 * !!label[2]);
     }
   }
 
@@ -222,55 +228,59 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
     groupBonus: groupBonus
   };
 
-  roundCache[id] = {
-    map: points ? this.cloneMap(this._map) : null,
-    roundScore: roundScore
-  };
-
   return roundScore;
 };
 
 var dx = [+1, 0, -1, 0];
 var dy = [0, +1, 0, -1];
 GameMap.prototype.dfs = function dfs(x, y, currentLabel, labelsMap) {
-  if (
-      (x < 0 || x >= 6) || // out of bounds
-      (y < 0 || y >= 12) // out of bounds
-    ) {
-    return;
-  }
+  var stack = [];
+  stack.push([x, y]);
+  while (stack.length) {
+    var p = stack.pop();
+    x = p[0];
+    y = p[1];
 
-  var cell = this._map[x][y];
-  if (cell === undefined) { // empty cell
-    currentLabel[1]++;
-    return;
-  }
+    if (
+        (x < 0 || x >= 6) || // out of bounds
+        (y < 0 || y >= 12) // out of bounds
+      ) {
+      continue;
+    }
 
-  if (labelsMap[x][y]) { // already labeled
-    return;
-  }
+    var cell = this._map[x][y];
+    if (cell === undefined) { // empty cell
+      currentLabel[1]++;
+      continue;
+    }
 
-  if (cell === 0) {
-    // mark the cell only as one to remove
-    currentLabel.push(x);
-    currentLabel.push(y);
+    if (labelsMap[x][y]) { // already labeled
+      continue;
+    }
 
-    // increment skull counter
-    currentLabel[3]++;
-  }
+    if (cell === 0) {
+      // mark the cell only as one to remove
+      currentLabel.push(x);
+      currentLabel.push(y);
 
-  if (cell === currentLabel[0]) {
-    // mark the current cell
-    currentLabel.push(x);
-    currentLabel.push(y);
-    labelsMap[x][y] = true;
+      // increment skull counter
+      currentLabel[3]++;
+      continue;
+    }
 
-    // increment cell counter
-    currentLabel[2]++;
+    if (cell === currentLabel[0]) {
+      // mark the current cell
+      currentLabel.push(x);
+      currentLabel.push(y);
+      labelsMap[x][y] = true;
 
-    // recursively mark the neighbors
-    for (var direction = 0; direction < 4; ++direction) {
-      this.dfs(x + dx[direction], y + dy[direction], currentLabel, labelsMap);
+      // increment cell counter
+      currentLabel[2]++;
+
+      // recursively mark the neighbors
+      for (var direction = 0; direction < 4; ++direction) {
+        stack.push([x + dx[direction], y + dy[direction]]);
+      }
     }
   }
 };

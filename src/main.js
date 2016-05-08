@@ -17,7 +17,7 @@ while (true) {
     blocks[i][1] = +blocks[i][1];
   }
 
-  GameMap.resetCache();
+  //GameMap.resetCache();
 
   for (i = 0; i < 2; i++) {
     var map = [[], [], [], [], [], []];
@@ -38,7 +38,7 @@ while (true) {
     map: maps[1],
     blocks: blocks,
     phenotypes: stores[1],
-    steps: 6,
+    steps: 4,
     generations: 20,
     populationSize: 40,
     immigration: 2,
@@ -51,6 +51,7 @@ while (true) {
   stores[1] = enemyEvolution.store;
   if (enemyEvolutionResult.best) {
     var enemyResults = enemyEvolutionResult.best.results;
+    printErr(enemyEvolutionResult.best.results)
     for (i = 0; i < enemyResults.length; i++) {
       if (enemyResults[i].points) {
         totalEnemyNuisance += (enemyResults[i].points / 70);
@@ -82,7 +83,6 @@ while (true) {
   stores[0] = result.store;
   printErr(JSON.stringify(result.lastGenerationStats));
   printErr(JSON.stringify(result.runStats.testedPhenotypes));
-  printErr(JSON.stringify(result.runStats));
   if (result.best) {
     var bestAction = result.best.phenotype[0] + ' ' + result.best.phenotype[1];
     var roundPoint = result.best.results[0].points;

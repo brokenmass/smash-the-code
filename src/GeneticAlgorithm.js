@@ -36,7 +36,7 @@ var DEFAULTS = {
   // moves to the next generation
   // Of these <(<mutationRate> * 100)>% mutates using <mutationFunction>
   // and the mutation result will be added to the next generation
-  mutationRate: 0.3,
+  mutationRate: 0.5,
   mutationFunction: function (phenotype) {
     return phenotype;
   },
@@ -74,8 +74,8 @@ var DEFAULTS = {
     };
   },
 
-  select1: selectors.select1.tournament3,
-  select2: selectors.select2.tournament3
+  select1: selectors.select1.tournament2,
+  select2: selectors.select2.tournament2
 };
 
 function GeneticAlgorithm(options) {
@@ -106,7 +106,7 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
     for (var x = 0; x < phenotypesLen; x++) {
       var phenotype = this._phenotypes[x];
       var result = _this._fitnessFunction(phenotype);
-      result.phenotype = phenotype;
+      //result.phenotype = phenotype;
       population[x] = result;
     }
 

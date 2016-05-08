@@ -6,12 +6,12 @@ var DEFAULTS = {
   debug: false,
   map: null,
   blocks: null,
-  steps: 8,
-  generations: 100,
-  populationSize: 50,
-  immigration: 5,
+  steps: 6,
+  generations: 50,
+  populationSize: 200,
+  immigration: 10,
   maxRuntime: 85,
-  minPoints: 420,
+  minPoints: 600,
   phenotypes: [],
   enemyNuisance: [0, 0, 0, 0, 0, 0, 0, 0]
 };
@@ -51,7 +51,7 @@ Evolution.prototype.seedFunction = function seedFunction(index, reseedCount) {
   var length = Math.max(1, this._steps - reseedCount) * 2;
   var phenotype = new Array(length);
   for (var i = 0; i < length; i += 2) {
-    var rotation = ~~(Math.random() * 4);
+    var rotation = Math.floor(Math.random() * 4);
     var minColumn = 0;
     var colCount = 6;
     if (rotation === 0) {
@@ -62,7 +62,7 @@ Evolution.prototype.seedFunction = function seedFunction(index, reseedCount) {
       colCount = 5;
     }
 
-    var column = minColumn + (~~(Math.random() * colCount));
+    var column = minColumn + Math.floor(Math.random() * colCount);
     phenotype[i] = column;
     phenotype[i + 1] = rotation;
   }
@@ -79,16 +79,19 @@ Evolution.prototype.fitnessFunction = function fitnessFunction(phenotype) {
   for (var x = 0; x < len; x += 2, turnIndex++) {
     var result = map.add(this._blocks[turnIndex], phenotype[x], phenotype[x + 1]);
     if (!result) {
-      fitness = -100;
+      fitness = fitness || -100;
+      phenotype = phenotype.slice(0, x);
+      break;
+    } else if (results.points > 0 && results.points < 420) {
+      phenotype = phenotype.slice(0, x);
       break;
     } else {
       results[turnIndex] = result;
-      var turnFitness = result.labelPoints + result.heightPoints;
-      if (result.points > this._minPoints) {
-        turnFitness += result.points;
+      var turnFitness = result.labelPoints;
+      if (!result.points || result.points > this._minPoints ) {
+        turnFitness += result.points + result.destroyedSkulls;
       }
-
-      fitness += ~~(turnFitness / (1 + turnIndex));
+      fitness += Math.floor(turnFitness / (1 + turnIndex*2));
     }
 
     if (this._enemyNuisance[x]) {
@@ -98,6 +101,7 @@ Evolution.prototype.fitnessFunction = function fitnessFunction(phenotype) {
 
   this._testedPhenotypes++;
   return {
+    phenotype: phenotype,
     fitness: fitness,
     results: results
   };
@@ -123,7 +127,7 @@ Evolution.prototype.crossoverFunction = function crossoverFunction(phenotypeA, p
   var child2 = new Array(length);
   var mother, father;
 
-  for (var x = 0; x < length; x += 2) {
+  for (var x = 0; x < length; x++) {
     if (!phenotypeA[x]) {
       mother = phenotypeB;
       father = phenotypeB;
@@ -139,19 +143,17 @@ Evolution.prototype.crossoverFunction = function crossoverFunction(phenotypeA, p
     }
 
     child1[x] = mother[x];
-    child1[x + 1] = mother[x + 1];
     child2[x] = father[x];
-    child2[x + 1] = father[x + 1];
   }
 
   return [child1, child2];
 };
 
 Evolution.prototype.mutationFunction = function mutationFunction(phenotype) {
-  var mutation = [].concat(phenotype);
-  var step = ~~(Math.random() * mutation.length / 2) * 2; // randomly select a step to mutate
+  var mutation = phenotype.slice();
+  var step = Math.floor(Math.random() * mutation.length / 2) * 2; // randomly select a step to mutate
 
-  var rotation = ~~(Math.random() * 4);
+  var rotation = Math.floor(Math.random() * 4);
   var minColumn = 0;
   var colCount = 6;
   if (rotation === 0) {
@@ -162,14 +164,14 @@ Evolution.prototype.mutationFunction = function mutationFunction(phenotype) {
     colCount = 5;
   }
 
-  var column = minColumn + (~~(Math.random() * colCount));
+  var column = minColumn + Math.floor(Math.random() * colCount);
   mutation[step] = column;
   mutation[step + 1] = rotation;
   return mutation;
 };
 
 Evolution.prototype.surviveFunction = function surviveFunction(entity) {
-  return entity.fitness >= 0;
+  return entity.phenotype.length && entity.fitness >= 0;
 };
 
 Evolution.prototype.terminationFunction = function terminationFunction(generation, population, stats) {
@@ -185,7 +187,7 @@ Evolution.prototype.terminationFunction = function terminationFunction(generatio
   }
 
   if (timeout) {
-    printErr(generation, stats.maximum, stats.minimum);
+    printErr(generation, population[0], stats.minimum);
     printErr('TERMINATING');
   }
 
@@ -200,11 +202,11 @@ Evolution.prototype.evolve = function evolve() {
 
   var result = this._algorithm.evolve();
 
-  var storeLen = ~~(result.population.length / 2);
+  var storeLen = Math.floor(result.population.length / 10);
   var phenotypesStore = new Array(storeLen);
   for (var i = 0; i < storeLen; i++) {
     var phenotype = result.population[i].phenotype.slice(2); // remove first, obsolete, action
-    var rotation = ~~(Math.random() * 4);
+    var rotation = Math.floor(Math.random() * 4);
     var minColumn = 0;
     var colCount = 6;
     if (rotation === 0) {
@@ -215,8 +217,9 @@ Evolution.prototype.evolve = function evolve() {
       colCount = 5;
     }
 
-    var column = minColumn + (~~(Math.random() * colCount));
-    phenotype.concat([column, rotation]);
+    var column = minColumn + Math.floor(Math.random() * colCount);
+    phenotype.push(column);
+    phenotype.push(rotation);
     phenotypesStore[i] = phenotype;
   }
 
