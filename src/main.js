@@ -37,7 +37,7 @@ while (true) {
   var evolutionConfig = {
     map: maps[0],
     blocks: blocks,
-    phenotypes: stores[0],
+    genotypes: stores[0],
     maxRuntime: 90
   };
 
@@ -45,10 +45,10 @@ while (true) {
   var result = evolution.evolve();
   stores[0] = result.store;
   printErr(JSON.stringify(result.lastGenerationStats));
-  printErr(JSON.stringify(result.runStats.testedPhenotypes));
+  printErr(JSON.stringify(result.runStats.testedgenotypes));
 
   if (result.best) {
-    var bestAction = result.best.phenotype[0] + ' ' + result.best.phenotype[1];
+    var bestAction = result.best.genotype[0] + ' ' + result.best.genotype[1];
     var roundPoint = result.best.results[0].points;
     points[0] += roundPoint;
     printErr('ROUND', roundPoint);

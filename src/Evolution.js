@@ -12,7 +12,7 @@ var DEFAULTS = {
   immigration: 10,
   maxRuntime: 85,
   minPoints: 600,
-  phenotypes: [],
+  genotypes: [],
   enemyNuisance: [0, 0, 0, 0, 0, 0, 0, 0]
 };
 
@@ -27,7 +27,7 @@ function Evolution(options) {
 
   this._algorithm = new GeneticAlgorithm({
     immigration: this._immigration,
-    phenotypes: this._phenotypes,
+    genotypes: this._genotypes,
     generations: this._generations,
     populationSize: this._populationSize,
     seedFunction: this.seedFunction.bind(this),
@@ -49,7 +49,7 @@ Evolution.prototype.debug = function debug(message) {
 
 Evolution.prototype.seedFunction = function seedFunction(index, reseedCount) {
   var length = Math.max(1, this._steps - reseedCount) * 2;
-  var phenotype = new Array(length);
+  var genotype = new Array(length);
   for (var i = 0; i < length; i += 2) {
     var rotation = Math.floor(Math.random() * 4);
     var minColumn = 0;
@@ -63,21 +63,21 @@ Evolution.prototype.seedFunction = function seedFunction(index, reseedCount) {
     }
 
     var column = minColumn + Math.floor(Math.random() * colCount);
-    phenotype[i] = column;
-    phenotype[i + 1] = rotation;
+    genotype[i] = column;
+    genotype[i + 1] = rotation;
   }
 
-  return phenotype;
+  return genotype;
 };
 
-Evolution.prototype.fitnessFunction = function fitnessFunction(phenotype) {
+Evolution.prototype.fitnessFunction = function fitnessFunction(genotype) {
   var map = this._map.clone();
   var fitness = 0;
   var turnIndex = 0;
-  var len = phenotype.length;
+  var len = genotype.length;
   var results = [];
   for (var x = 0; x < len; x += 2, turnIndex++) {
-    var result = map.add(this._blocks[turnIndex], phenotype[x], phenotype[x + 1]);
+    var result = map.add(this._blocks[turnIndex], genotype[x], genotype[x + 1]);
     if (!result) {
       fitness = -100;
       break;
@@ -99,7 +99,7 @@ Evolution.prototype.fitnessFunction = function fitnessFunction(phenotype) {
     }
   }
 
-  this._testedPhenotypes++;
+  this._testedgenotypes++;
   return {
     fitness: fitness,
     results: results
@@ -130,25 +130,25 @@ Evolution.prototype.statsFunction = function statsFunction(generation, populatio
   };
 };
 
-Evolution.prototype.crossoverFunction = function crossoverFunction(phenotypeA, phenotypeB) {
-  var length = Math.max(phenotypeA.length, phenotypeB.length);
+Evolution.prototype.crossoverFunction = function crossoverFunction(genotypeA, genotypeB) {
+  var length = Math.max(genotypeA.length, genotypeB.length);
   var child1 = new Array(length);
   var child2 = new Array(length);
   var mother, father;
 
   for (var x = 0; x < length; x += 2) {
-    if (!phenotypeA[x]) {
-      mother = phenotypeB;
-      father = phenotypeB;
-    } else if (!phenotypeB[x]) {
-      mother = phenotypeA;
-      father = phenotypeA;
+    if (!genotypeA[x]) {
+      mother = genotypeB;
+      father = genotypeB;
+    } else if (!genotypeB[x]) {
+      mother = genotypeA;
+      father = genotypeA;
     } else if (Math.random() >= 0.5) {
-      mother = phenotypeA;
-      father = phenotypeB;
+      mother = genotypeA;
+      father = genotypeB;
     } else {
-      mother = phenotypeB;
-      father = phenotypeA;
+      mother = genotypeB;
+      father = genotypeA;
     }
 
     child1[x] = mother[x];
@@ -160,8 +160,8 @@ Evolution.prototype.crossoverFunction = function crossoverFunction(phenotypeA, p
   return [child1, child2];
 };
 
-Evolution.prototype.mutationFunction = function mutationFunction(phenotype) {
-  var mutation = phenotype.slice();
+Evolution.prototype.mutationFunction = function mutationFunction(genotype) {
+  var mutation = genotype.slice();
   var step = Math.floor(Math.random() * mutation.length / 2) * 2; // randomly select a step to mutate
 
   var rotation = Math.floor(Math.random() * 4);
@@ -207,7 +207,7 @@ Evolution.prototype.terminationFunction = function terminationFunction(generatio
 
 Evolution.prototype.evolve = function evolve() {
   this._startTime = Date.now();
-  this._testedPhenotypes = 0;
+  this._testedgenotypes = 0;
   this._runTimes = [];
   this._prevRun = this._startTime;
 
@@ -215,10 +215,10 @@ Evolution.prototype.evolve = function evolve() {
 
   // storing the best 10% of the population to kick start the next round
   var storeLen = Math.floor(result.population.length / 10);
-  var phenotypesStore = new Array(storeLen);
+  var genotypesStore = new Array(storeLen);
   for (var i = 0; i < storeLen; i++) {
     // remove first, obsolete, action and replace with a new random one
-    var phenotype = result.population[i].phenotype.slice(2);
+    var genotype = result.population[i].genotype.slice(2);
     var rotation = Math.floor(Math.random() * 4);
     var minColumn = 0;
     var colCount = 6;
@@ -231,18 +231,18 @@ Evolution.prototype.evolve = function evolve() {
     }
 
     var column = minColumn + Math.floor(Math.random() * colCount);
-    phenotype.push(column);
-    phenotype.push(rotation);
-    phenotypesStore[i] = phenotype;
+    genotype.push(column);
+    genotype.push(rotation);
+    genotypesStore[i] = genotype;
   }
 
   return {
     best: result.population[0],
-    store: phenotypesStore,
+    store: genotypesStore,
     lastGenerationStats: result.stats,
     runStats: {
       generations: result.generation + 1,
-      testedPhenotypes: this._testedPhenotypes,
+      testedgenotypes: this._testedgenotypes,
       runTimes: this._runTimes,
       totalRunTime: Date.now() - this._startTime
     }

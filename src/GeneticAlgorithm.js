@@ -6,7 +6,7 @@ var DEFAULTS = {
   generations: 100,
 
   populationSize: 100,
-  phenotypes: [],
+  genotypes: [],
 
   // reseedCount it's used to indicate how many reseed happened so far so that
   // the seed function can act accordingly and eventuall simplify the pheonotype
@@ -25,11 +25,11 @@ var DEFAULTS = {
   immigration: 2,
 
   // At every generation ~<( <crossoverRate> * <populationSize> )> individuals will breed and generate
-  // new individual using the <crossoverFunction> to mix their phenotypes
+  // new individual using the <crossoverFunction> to mix their genotypes
   // and the new indivuals will be added to the next generation.
   crossoverRate: 0.5,
-  crossoverFunction: function (phenotypeA, phenotypeB) {
-    return [phenotypeA, phenotypeB];
+  crossoverFunction: function (genotypeA, genotypeB) {
+    return [genotypeA, genotypeB];
   },
 
   // At every generation, ~<( (1 - <crossoverRate>) * <populationSize> )> individuals
@@ -37,19 +37,19 @@ var DEFAULTS = {
   // Of these <(<mutationRate> * 100)>% mutates using <mutationFunction>
   // and the mutation result will be added to the next generation
   mutationRate: 0.3,
-  mutationFunction: function (phenotype) {
-    return phenotype;
+  mutationFunction: function (genotype) {
+    return genotype;
   },
 
-  // Calculate the fitness score of a phenotype
-  fitnessFunction: function (phenotype) {
-    return phenotype || 0;
+  // Calculate the fitness score of a genotype
+  fitnessFunction: function (genotype) {
+    return genotype || 0;
   },
 
   // After every generation it's possible to kill the unfitted individual
-  // in this way their phenotype will not be propagated to the next generation
+  // in this way their genotype will not be propagated to the next generation
   // return false to 'kill' an individual
-  surviveFunction: function (phenotype, fitness) {
+  surviveFunction: function (genotype, fitness) {
     return true;
   },
 
@@ -86,9 +86,9 @@ function GeneticAlgorithm(options) {
     this['_' + key] = options[key] || DEFAULTS[key];
   }
 
-  var len = this._phenotypes.length;
+  var len = this._genotypes.length;
   for (i = this._populationSize - 1; i >= len; i--)  {
-    this._phenotypes[i] = this._seedFunction(i, 0);
+    this._genotypes[i] = this._seedFunction(i, 0);
   }
 }
 
@@ -101,12 +101,12 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
     this._internalState = {};
 
     // score and sort
-    var phenotypesLen = this._phenotypes.length;
-    population = new Array(phenotypesLen);
-    for (var x = 0; x < phenotypesLen; x++) {
-      var phenotype = this._phenotypes[x];
-      var result = _this._fitnessFunction(phenotype);
-      result.phenotype = phenotype;
+    var genotypesLen = this._genotypes.length;
+    population = new Array(genotypesLen);
+    for (var x = 0; x < genotypesLen; x++) {
+      var genotype = this._genotypes[x];
+      var result = _this._fitnessFunction(genotype);
+      result.genotype = genotype;
       population[x] = result;
     }
 
@@ -124,7 +124,7 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
       // All dead ! reseed
       reseedCount++;
       for (i = 0; i < this._populationSize; ++i)  {
-        this._phenotypes[i] = this._seedFunction(i, reseedCount);
+        this._genotypes[i] = this._seedFunction(i, reseedCount);
       }
 
       printErr('GA STATS', generation, 'ALL DEAD');
@@ -132,14 +132,14 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
     }
 
     var i = 0;
-    var nextPhenotypes = new Array(this._populationSize);
+    var nextgenotypes = new Array(this._populationSize);
     while (i < this._elitarism) {
-      nextPhenotypes[i] = population[i].phenotype;
+      nextgenotypes[i] = population[i].genotype;
       i++;
     }
 
     while (i < this._elitarism + this._immigration) {
-      nextPhenotypes[i] = this._seedFunction(i, 0);
+      nextgenotypes[i] = this._seedFunction(i, 0);
       i++;
     }
 
@@ -150,19 +150,19 @@ GeneticAlgorithm.prototype.evolve = function evolve() {
       ) {
         var parents = this._select2(this, population);
         var childs = this._crossoverFunction(parents[0], parents[1]);
-        nextPhenotypes[i++] = childs[0];
-        nextPhenotypes[i++] = childs[1];
+        nextgenotypes[i++] = childs[0];
+        nextgenotypes[i++] = childs[1];
       } else {
-        var selectedPhenotype = this._select1(this, population);
+        var selectedgenotype = this._select1(this, population);
         if (Math.random() < this._mutationRate) {
-          selectedPhenotype = this._mutationFunction(selectedPhenotype);
+          selectedgenotype = this._mutationFunction(selectedgenotype);
         }
 
-        nextPhenotypes[i++] = selectedPhenotype;
+        nextgenotypes[i++] = selectedgenotype;
       }
     }
 
-    this._phenotypes = nextPhenotypes;
+    this._genotypes = nextgenotypes;
   }
 
   return {
