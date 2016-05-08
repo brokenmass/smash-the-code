@@ -79,19 +79,19 @@ Evolution.prototype.fitnessFunction = function fitnessFunction(phenotype) {
   for (var x = 0; x < len; x += 2, turnIndex++) {
     var result = map.add(this._blocks[turnIndex], phenotype[x], phenotype[x + 1]);
     if (!result) {
-      fitness = fitness || -100;
-      phenotype = phenotype.slice(0, x);
-      break;
-    } else if (results.points > 0 && results.points < 420) {
-      phenotype = phenotype.slice(0, x);
+      fitness = -100;
       break;
     } else {
       results[turnIndex] = result;
       var turnFitness = result.labelPoints;
       if (!result.points || result.points > this._minPoints ) {
-        turnFitness += result.points + result.destroyedSkulls;
+        turnFitness += result.points + 5*result.destroyedSkulls;
+      } else {
+        fitness = 0;
+        break;
       }
-      fitness += Math.floor(turnFitness / (1 + turnIndex*2));
+
+      fitness += Math.floor(turnFitness / (1 + turnIndex));
     }
 
     if (this._enemyNuisance[x]) {
@@ -101,13 +101,22 @@ Evolution.prototype.fitnessFunction = function fitnessFunction(phenotype) {
 
   this._testedPhenotypes++;
   return {
-    phenotype: phenotype,
     fitness: fitness,
     results: results
   };
 };
 
 Evolution.prototype.comparisonFunction = function comparisonFunction(entityA, entityB) {
+  if (entityB.fitness > 3000 && entityA.fitness > 3000) {
+    // for high scoring solution just pick the one scoring first
+    for (var x = 0; x < Math.min(entityA.results.length, entityB.results.length); x++) {
+      var diff = entityB.results[x].points - entityA.results[x].points;
+      if (diff !== 0) {
+        return diff;
+      }
+    }
+  }
+
   return entityB.fitness - entityA.fitness;
 },
 
@@ -127,7 +136,7 @@ Evolution.prototype.crossoverFunction = function crossoverFunction(phenotypeA, p
   var child2 = new Array(length);
   var mother, father;
 
-  for (var x = 0; x < length; x++) {
+  for (var x = 0; x < length; x += 2) {
     if (!phenotypeA[x]) {
       mother = phenotypeB;
       father = phenotypeB;
@@ -143,7 +152,9 @@ Evolution.prototype.crossoverFunction = function crossoverFunction(phenotypeA, p
     }
 
     child1[x] = mother[x];
+    child1[x + 1] = mother[x + 1];
     child2[x] = father[x];
+    child2[x + 1] = father[x + 1];
   }
 
   return [child1, child2];
@@ -171,7 +182,7 @@ Evolution.prototype.mutationFunction = function mutationFunction(phenotype) {
 };
 
 Evolution.prototype.surviveFunction = function surviveFunction(entity) {
-  return entity.phenotype.length && entity.fitness >= 0;
+  return entity.fitness >= 0;
 };
 
 Evolution.prototype.terminationFunction = function terminationFunction(generation, population, stats) {
@@ -202,10 +213,12 @@ Evolution.prototype.evolve = function evolve() {
 
   var result = this._algorithm.evolve();
 
+  // storing the best 10% of the population to kick start the next round
   var storeLen = Math.floor(result.population.length / 10);
   var phenotypesStore = new Array(storeLen);
   for (var i = 0; i < storeLen; i++) {
-    var phenotype = result.population[i].phenotype.slice(2); // remove first, obsolete, action
+    // remove first, obsolete, action and replace with a new random one
+    var phenotype = result.population[i].phenotype.slice(2);
     var rotation = Math.floor(Math.random() * 4);
     var minColumn = 0;
     var colCount = 6;

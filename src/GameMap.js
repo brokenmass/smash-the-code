@@ -1,7 +1,6 @@
 'use strict';
 
 var colors = require('./colors');
-
 var turnCache = { _hits: 0 };
 var roundCache = { _hits: 0 };
 
@@ -26,21 +25,6 @@ GameMap.prototype.serialize = function serialize() {
     }
 
     out += '|';
-  }
-
-  return out;
-};
-
-GameMap.prototype.deserialize = function deserialize(serialized) {
-  var out = [[], [], [], [], [], []];
-  var i = 0, x = 0, y = 0;
-  for (i = 0; i < serialized.length; i++, y++) {
-    if (serialized[i] === '|') {
-      x++;
-      y = -1;
-    } else {
-      out[x][y] = parseInt(serialized[i]);
-    }
   }
 
   return out;
@@ -101,7 +85,7 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
   if (tc) {
     turnCache._hits++;
     if (tc.turnScore.points) {
-      this._map = this.deserialize(tc.map);
+      this._map = this.cloneMap(tc.map);
     }
 
     return tc.turnScore;
@@ -146,21 +130,31 @@ GameMap.prototype.calcTurnScore = function calcTurnScore() {
     }
   }
 
-  turnScore.heightPoints = maxHeight / 2;
+  // slight increase of score for 'taller' layouts
+  turnScore.heightPoints = maxHeight / 4;
 
-  if (id.length > 20) {
-    turnCache[id] = {
-      map: turnScore.points ? this.serialize(this._map) : null,
-      turnScore: turnScore
-    };
-  }
+  turnCache[id] = {
+    map: turnScore.points ? this.cloneMap(this._map) : null,
+    turnScore: turnScore
+  };
 
   return turnScore;
 };
 
 var groupPoints = [0, 1, 4, 20];
 GameMap.prototype.calcRoundScore = function calcRoundScore() {
+  var id = this.serialize();
   var x, y, i, cell, len;
+  var rc = roundCache[id];
+
+  if (rc) {
+    roundCache._hits++;
+    if (rc.roundScore.points) {
+      this._map = this.cloneMap(rc.map);
+    }
+
+    return rc;
+  }
 
   var labels = [];
   var labelsMap = [[], [], [], [], [], []];
@@ -205,6 +199,7 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
         this._map[label[x]][label[x + 1]] = null;
       }
     } else {
+      // giving score to more compact layout
       labelPoints += groupPoints[cellsCount] * (1 + 0.5 * !!label[2]);
     }
   }
@@ -228,59 +223,55 @@ GameMap.prototype.calcRoundScore = function calcRoundScore() {
     groupBonus: groupBonus
   };
 
+  roundCache[id] = {
+    map: points ? this.cloneMap(this._map) : null,
+    roundScore: roundScore
+  };
+
   return roundScore;
 };
 
 var dx = [+1, 0, -1, 0];
 var dy = [0, +1, 0, -1];
 GameMap.prototype.dfs = function dfs(x, y, currentLabel, labelsMap) {
-  var stack = [];
-  stack.push([x, y]);
-  while (stack.length) {
-    var p = stack.pop();
-    x = p[0];
-    y = p[1];
+  if (
+      (x < 0 || x >= 6) || // out of bounds
+      (y < 0 || y >= 12) // out of bounds
+    ) {
+    return;
+  }
 
-    if (
-        (x < 0 || x >= 6) || // out of bounds
-        (y < 0 || y >= 12) // out of bounds
-      ) {
-      continue;
-    }
+  var cell = this._map[x][y];
+  if (cell === undefined) { // empty cell
+    currentLabel[1]++;
+    return;
+  }
 
-    var cell = this._map[x][y];
-    if (cell === undefined) { // empty cell
-      currentLabel[1]++;
-      continue;
-    }
+  if (labelsMap[x][y]) { // already labeled
+    return;
+  }
 
-    if (labelsMap[x][y]) { // already labeled
-      continue;
-    }
+  if (cell === 0) {
+    // mark the cell only as one to remove
+    currentLabel.push(x);
+    currentLabel.push(y);
 
-    if (cell === 0) {
-      // mark the cell only as one to remove
-      currentLabel.push(x);
-      currentLabel.push(y);
+    // increment skull counter
+    currentLabel[3]++;
+  }
 
-      // increment skull counter
-      currentLabel[3]++;
-      continue;
-    }
+  if (cell === currentLabel[0]) {
+    // mark the current cell
+    currentLabel.push(x);
+    currentLabel.push(y);
+    labelsMap[x][y] = true;
 
-    if (cell === currentLabel[0]) {
-      // mark the current cell
-      currentLabel.push(x);
-      currentLabel.push(y);
-      labelsMap[x][y] = true;
+    // increment cell counter
+    currentLabel[2]++;
 
-      // increment cell counter
-      currentLabel[2]++;
-
-      // recursively mark the neighbors
-      for (var direction = 0; direction < 4; ++direction) {
-        stack.push([x + dx[direction], y + dy[direction]]);
-      }
+    // recursively mark the neighbors
+    for (var direction = 0; direction < 4; ++direction) {
+      this.dfs(x + dx[direction], y + dy[direction], currentLabel, labelsMap);
     }
   }
 };
